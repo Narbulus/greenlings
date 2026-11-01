@@ -1,0 +1,47 @@
+# Greydwarfs break bushes for wood; brutes split logs. Neither touches standing trees.
+!include _setup.txt
+gldev_place piece_chest_wood -4 3
+gldev_place Bush01 2 7
+gldev_place Bush01 4 9
+gldev_place Bush01 1 10
+gldev_place Greydwarf 0 3
+!wait 1
+gldev_tame
+gldev_bond 100
+gldev_give Coins 5
+gldev_useitem Coins
+gldev_pat
+!waitfor GLEVT\] state .*to=Watching 3
+# show it: smash a bush, pick up the wood, put it in the chest
+gldev_hit Bush01 3
+!wait 1.5
+gldev_pickup Wood
+!waitfor GLEVT\] demo_source item=Wood at=BreakArea:bush 3
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_put Wood 1
+gldev_close
+!waitfor GLEVT\] learned .*Wood: BreakArea:bush@.* -> Container 3
+!waitfor GLEVT\] smash .*category=bush 30
+!waitfor GLEVT\] take .*item=Wood 30
+!waitfor GLEVT\] deposit .*item=Wood 40
+
+# a brute only whacks: show it by hitting a log, and it smashes every log around, leaving the wood
+gldev_clear
+!wait 1
+gldev_place beech_log 3 8
+gldev_place beech_log -1 11
+gldev_place Greydwarf_Elite 0 3
+!wait 1
+gldev_tame
+gldev_bond 100
+gldev_give Coins 5
+gldev_useitem Coins
+gldev_pat
+!waitfor GLEVT\] state .*to=Watching 3
+gldev_hit beech_log 1
+!waitfor GLEVT\] learned .*smash: BreakArea:log 3
+!waitfor GLEVT\] smash .*category=log 30
+!waitfor GLEVT\] wait .*reason=nothing_to_smash 150
+gl_dump 25
+!waitfor GLDUMP\] \{"type":"drops","items":".*Wood 2

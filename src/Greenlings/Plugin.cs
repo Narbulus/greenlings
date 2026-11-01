@@ -50,6 +50,8 @@ namespace Greenlings
         internal static ConfigEntry<float> WaitRecheck;
         internal static ConfigEntry<float> StuckTimeout;
         internal static ConfigEntry<float> MischiefChance;
+        internal static ConfigEntry<float> BrutePower;
+        internal static ConfigEntry<string> GreydwarfPickables;
         internal static ConfigEntry<string> GiftPickables;
         internal static ConfigEntry<float> MimicChance;
         internal static ConfigEntry<float> AudienceChance;
@@ -95,6 +97,9 @@ namespace Greenlings
             WaitRecheck = Config.Bind("Labor", "WaitRecheck", 5f, "Seconds a waiting greenling idles before checking its task again.");
             StuckTimeout = Config.Bind("Labor", "StuckTimeout", 30f, "Seconds without reaching a target before giving up on that trip.");
 
+            BrutePower = Config.Bind("Roles", "BrutePower", 40f, "Chop/pickaxe damage per brute whack (splitting logs, smashing rocks).");
+            GreydwarfPickables = Config.Bind("Roles", "GreydwarfPickables", "Pickable_Stone,Pickable_Flint,Pickable_Branch",
+                "Pickables that count as greydwarf gathering rather than greyling foraging.");
             MischiefChance = Config.Bind("Mischief", "Chance", 0.015f, "Chance every 2s that an idle greenling starts a prank or a cute moment (x3 when sulky, x2 for strays). 0 disables.");
             MimicChance = Config.Bind("Mischief", "MimicChance", 0.35f, "Chance an idle greenling nearby copies what you just did (copycats: much more).");
             AudienceChance = Config.Bind("Mischief", "AudienceChance", 0.4f, "Chance an idle greenling stops to watch (or joins) another's antics.");

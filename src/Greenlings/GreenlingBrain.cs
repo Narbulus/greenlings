@@ -103,6 +103,8 @@ namespace Greenlings
             _phaseTime += dt;
             _actionCooldown -= dt;
 
+            if (task.IsWhack) { Whack(task, dt); return; }
+
             if (!task.Source.AreaLoaded || !task.Sink.AreaLoaded || (task.Sink.IsStation && !task.Sink.Resolve()) || (task.Source.IsStation && !task.Source.Resolve()))
             {
                 if (_phase != Phase.Wait) Wait("station_not_loaded");
@@ -128,7 +130,7 @@ namespace Greenlings
         private void Fetch(LaborTask task, float dt)
         {
             var src = task.Source;
-            var room = Plugin.CarryMax.Value - _g.CarryCount;
+            var room = _g.CarryPerTrip - _g.CarryCount;
             if (room <= 0) { Enter(Phase.Deliver); return; }
 
             if (src.Kind == EndpointKind.Container)
@@ -152,11 +154,26 @@ namespace Greenlings
                 if (!Act(dt, "attack")) return; // scoop it up
                 var n = Sources.PickUp(drop, room);
                 if (n > 0) Took(task, n);
-                Enter(_g.CarryCount >= Plugin.CarryMax.Value ? Phase.Deliver : Phase.Fetch); // keep collecting until hands are full
+                Enter(_g.CarryCount >= _g.CarryPerTrip ? Phase.Deliver : Phase.Fetch); // keep collecting until hands are full
                 return;
             }
 
             if (_actionCooldown > 0f) return; // waiting for harvested items to land
+
+            if (src.Kind == EndpointKind.BreakArea)
+            {
+                var target = Breakables.Nearest(src, _g.transform.position);
+                if (!target) { DeliverOrWait("source_empty"); return; }
+                if (!Arrive(dt, target.transform.position, Plugin.StationReach.Value)) return;
+                AI.LookAt(target.transform.position);
+                if (!Act(dt, "attack")) return; // whack
+                var label = $"{Utils.GetPrefabName(target)}#{target.GetComponent<ZNetView>().GetZDO().m_uid.ID}"; // the hit may destroy it
+                Breakables.Hit(target, _g.Character, _g.Role);
+                _g.Event("smash", $"target={label} category={src.Prefab}");
+                _actionCooldown = 0.4f;
+                return;
+            }
+
             var producer = Sources.ProducerReady(src, task.Item, _g.transform.position);
             if (producer)
             {
@@ -172,6 +189,29 @@ namespace Greenlings
             }
 
             DeliverOrWait("source_empty");
+        }
+
+        /// <summary>Brute work: smash everything of the category in the area, leave the pieces.</summary>
+        private void Whack(LaborTask task, float dt)
+        {
+            if (_phase == Phase.Wait)
+            {
+                AI.StopMoving();
+                if (_phaseTime > Plugin.WaitRecheck.Value * Traits.WaitRecheck(_g)) Enter(Phase.Fetch);
+                return;
+            }
+            if (_actionCooldown > 0f) return;
+            var target = Breakables.Nearest(task.Source, _g.transform.position);
+            if (!target) { Wait("nothing_to_smash"); return; }
+            if (!Arrive(dt, target.transform.position, Plugin.StationReach.Value + 0.5f)) return;
+            AI.LookAt(target.transform.position);
+            if (!Act(dt, "attack")) return;
+            var label = $"{Utils.GetPrefabName(target)}#{target.GetComponent<ZNetView>().GetZDO().m_uid.ID}";
+            Breakables.Hit(target, _g.Character, _g.Role);
+            _g.Event("smash", $"target={label} category={task.Source.Prefab}");
+            _lastWaitReason = null;
+            _actionCooldown = 0.3f;
+            Enter(Phase.Fetch);
         }
 
         private void DeliverOrWait(string reason)
@@ -276,6 +316,8 @@ namespace Greenlings
         {
             if (_actTimer < 0f)
             {
+                // brutes have no throw animation: they swing instead
+                if (trigger == "throw" && _g.Role == Role.Brute) trigger = "attack";
                 _g.Character.m_zanim.SetTrigger(trigger);
                 _actTimer = Plugin.ActionTime.Value * Traits.ActionTime(_g);
                 return false;

@@ -1,0 +1,30 @@
+# Greylings don't run machines; greydwarfs do.
+!include _setup.txt
+gldev_place piece_chest_wood -3 4
+gldev_place smelter 4 6
+gldev_fill piece_chest_wood CopperOre 4
+!include _watching.txt
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take CopperOre 1
+gldev_close
+gldev_addore smelter CopperOre
+!waitfor GLEVT\] lesson_refused .*role=greyling reason="machines are greydwarf work" 3
+# a greydwarf can
+gldev_move 0 -3
+gldev_place Greydwarf 1 3
+!wait 1
+gldev_tame
+gldev_bond 100
+!wait 1
+gldev_useitem Coins
+gldev_pat
+!waitfor GLEVT\] state .*to=Watching 3
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take CopperOre 1
+gldev_close
+gldev_addore smelter CopperOre
+!waitfor GLEVT\] learned .*CopperOre: Container:piece_chest_wood#\d+ -> SmelterOre:smelter 3
+!waitfor GLEVT\] deposit .*item=CopperOre 40
+gl_dump 15

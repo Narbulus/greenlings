@@ -29,6 +29,8 @@ namespace Greenlings
         public Tameable Tameable { get; private set; }
         public ZNetView NView { get; private set; }
         public GreenlingBrain Brain { get; private set; }
+        public Role Role { get; private set; }
+        public int CarryPerTrip => Roles.CarryPerTrip(Role);
 
         private string _wildName;
         private float _appliedTint = -1f;
@@ -77,6 +79,7 @@ namespace Greenlings
             AI = GetComponent<MonsterAI>();
             Tameable = GetComponent<Tameable>();
             NView = GetComponent<ZNetView>();
+            Role = Roles.Of(gameObject);
             Brain = new GreenlingBrain(this);
             _wildName = Character.m_name;
         }

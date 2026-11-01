@@ -88,6 +88,19 @@ namespace Greenlings
             return true;
         }
 
+        /// <summary>The player hit something breakable: watching brutes take that as their lesson.</summary>
+        public static void Whack(Endpoint area)
+        {
+            if (!Active) return;
+            var task = new LaborTask { Item = "", Source = area, Sink = Endpoint.LeaveIt(area.Pos) };
+            foreach (var g in Watchers(Player.m_localPlayer).Where(w => w.Role == Role.Brute).ToList())
+            {
+                if (!Roles.CanLearn(g.Role, task, out _)) continue;
+                Plugin.Log.LogInfo($"[GLEVT] lesson gl={g.Label} task=\"{task}\"");
+                g.NView.InvokeRPC("GL_Learn", task.Serialize());
+            }
+        }
+
         public static void Source(Endpoint where, string item)
         {
             if (!Active) return;
@@ -107,6 +120,12 @@ namespace Greenlings
             var task = new LaborTask { Item = item, Source = _source, Sink = where };
             foreach (var g in Watchers(Player.m_localPlayer).ToList())
             {
+                if (!Roles.CanLearn(g.Role, task, out var why))
+                {
+                    Plugin.Log.LogInfo($"[GLEVT] lesson_refused gl={g.Label} role={Roles.Name(g.Role)} reason=\"{why}\" task=\"{task}\"");
+                    Player.m_localPlayer.Message(MessageHud.MessageType.Center, $"{g.GetName()} stares at you, baffled. ({why})");
+                    continue;
+                }
                 Plugin.Log.LogInfo($"[GLEVT] lesson gl={g.Label} task=\"{task}\"");
                 g.NView.InvokeRPC("GL_Learn", task.Serialize());
             }
@@ -138,7 +157,7 @@ namespace Greenlings
             if (!__result || !__state.HasValue || !Teaching.Active) return;
             var (item, pos) = __state.Value;
             if (Teaching.PickableSourceFor(item, out var area)) Teaching.Source(area, item);
-            else Teaching.Source(Sources.ProducerFor(pos, item) ?? Endpoint.Ground(pos), item);
+            else Teaching.Source(Breakables.SourceFor(pos) ?? Sources.ProducerFor(pos, item) ?? Endpoint.Ground(pos), item);
         }
     }
 

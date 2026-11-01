@@ -20,6 +20,9 @@ namespace Greenlings
         Ground = 3,        // loose drops around a spot
         Extract = 8,       // a producer station: beehive, sap collector, cooking station, fermenter
         PickableArea = 9,  // any pickable of one prefab around a spot (berry bushes, mushrooms, crops)
+        BreakArea = 10,    // smash things of one category around a spot (bushes, logs, rocks); Prefab = category
+        // sink for brute jobs
+        Leave = 11,        // just leave the pieces where they fall (someone else hauls them)
     }
 
     public class Endpoint
@@ -36,13 +39,18 @@ namespace Greenlings
 
         public static Endpoint Pickables(Vector3 pos, string prefab) => new Endpoint { Kind = EndpointKind.PickableArea, Pos = pos, Prefab = prefab };
 
-        public bool IsStation => Kind != EndpointKind.Ground && Kind != EndpointKind.PickableArea;
+        public static Endpoint BreakArea(Vector3 pos, string category) => new Endpoint { Kind = EndpointKind.BreakArea, Pos = pos, Prefab = category };
+
+        public bool IsStation => Kind != EndpointKind.Ground && Kind != EndpointKind.PickableArea && Kind != EndpointKind.BreakArea && Kind != EndpointKind.Leave;
+
+        public static Endpoint LeaveIt(Vector3 pos) => new Endpoint { Kind = EndpointKind.Leave, Pos = pos };
 
         /// <summary>How far from <see cref="Pos"/> loose items count as belonging to this source.</summary>
         public float CollectRadius => Kind switch
         {
             EndpointKind.Ground => 6f,
             EndpointKind.PickableArea => 12f,
+            EndpointKind.BreakArea => 12f,
             _ => 3f,
         };
 
@@ -134,9 +142,11 @@ namespace Greenlings
             return new LaborTask { Item = p[0], Source = Endpoint.Parse(p[1]), Sink = Endpoint.Parse(p[2]) };
         }
 
-        public override string ToString() => $"{Item}: {Source} -> {Sink}";
+        public override string ToString() => IsWhack ? $"smash: {Source}" : $"{Item}: {Source} -> {Sink}";
 
-        public string Describe() => $"{Items.DisplayName(Item)} to {Station(Sink)}";
+        public bool IsWhack => Sink.Kind == EndpointKind.Leave;
+
+        public string Describe() => IsWhack ? $"smashing {Source.Prefab}s" : $"{Items.DisplayName(Item)} to {Station(Sink)}";
 
         private static string Station(Endpoint e)
         {
@@ -173,6 +183,7 @@ namespace Greenlings
                 var c = src.Get<Container>();
                 return c && c.GetInventory().CountItems(Items.SharedName(item)) > 0;
             }
+            if (src.Kind == EndpointKind.BreakArea) return FindDrop(src, item, from) || Breakables.Nearest(src, from);
             return FindDrop(src, item, from) || ProducerReady(src, item, from) != null;
         }
 
@@ -264,6 +275,7 @@ namespace Greenlings
     {
         public static bool Accepts(Endpoint sink, string item)
         {
+            if (sink.Kind == EndpointKind.Leave) return true;
             var go = sink.Resolve();
             if (!go) return false;
             switch (sink.Kind)

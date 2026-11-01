@@ -14,16 +14,23 @@ namespace Greenlings
     {
         private static void Postfix(ZNetScene __instance)
         {
-            var greyling = __instance.GetPrefab("Greyling");
             var boar = __instance.GetPrefab("Boar");
             var tameItem = __instance.GetPrefab(Plugin.TameItem.Value)?.GetComponent<ItemDrop>();
-            if (!greyling || !boar || !tameItem)
+            if (!boar || !tameItem)
             {
-                Plugin.Log.LogError($"prefab setup failed (Greyling={greyling}, Boar={boar}, {Plugin.TameItem.Value}={tameItem})");
+                Plugin.Log.LogError($"prefab setup failed (Boar={boar}, {Plugin.TameItem.Value}={tameItem})");
                 return;
             }
+            foreach (var name in Roles.TameablePrefabs)
+            {
+                var prefab = __instance.GetPrefab(name);
+                if (prefab) MakeTameable(prefab, boar.GetComponent<Tameable>(), tameItem);
+                else Plugin.Log.LogWarning("missing prefab " + name);
+            }
+        }
 
-            var boarTame = boar.GetComponent<Tameable>();
+        private static void MakeTameable(GameObject greyling, Tameable boarTame, ItemDrop tameItem)
+        {
             var tame = greyling.GetComponent<Tameable>() ?? greyling.AddComponent<Tameable>();
             tame.m_tamingTime = Plugin.TamingTime.Value;
             tame.m_fedDuration = Plugin.FedDuration.Value;
@@ -38,7 +45,7 @@ namespace Greenlings
 
             if (!greyling.GetComponent<Greenling>()) greyling.AddComponent<Greenling>();
             if (!greyling.GetComponent<CarryVisual>()) greyling.AddComponent<CarryVisual>();
-            Plugin.Log.LogInfo($"Greyling is now tameable with {tameItem.name} ({tame.m_tamingTime}s, fed {tame.m_fedDuration}s per item)");
+            Plugin.Log.LogInfo($"{greyling.name} is now tameable with {tameItem.name} ({tame.m_tamingTime}s, fed {tame.m_fedDuration}s per item)");
         }
     }
 }

@@ -38,6 +38,17 @@ namespace Greenlings.DevTools
             while (n > 0 && inv.AddItem(prefab, Mathf.Min(n, max))) n -= Mathf.Min(n, max);
         }
 
+        private static readonly string[] TamePrefabs = { "Greyling", "Greydwarf", "Greydwarf_Elite" };
+        private static GameObject _lastTame;
+
+        /// <summary>The tameable creature most recently placed by gldev_place, else the nearest greyling/greydwarf/brute.</summary>
+        private static Tameable NearestTame() =>
+            _lastTame && _lastTame.GetComponent<Tameable>() ? _lastTame.GetComponent<Tameable>() :
+            Object.FindObjectsByType<Tameable>(FindObjectsSortMode.None)
+                .Where(t => TamePrefabs.Contains(Utils.GetPrefabName(t.gameObject)))
+                .OrderBy(t => Vector3.Distance(t.transform.position, P.transform.position))
+                .FirstOrDefault();
+
         private static GameObject NearestObject(string prefab) =>
             LastPlaced.TryGetValue(prefab, out var last) && last ? last :
             Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None)
@@ -112,6 +123,7 @@ namespace Greenlings.DevTools
                 var go = Object.Instantiate(prefab, pos, Quaternion.LookRotation(-t.forward));
                 Placed.Add(go);
                 LastPlaced[a[1]] = go;
+                if (go.GetComponent<Tameable>()) _lastTame = go;
                 System.IO.File.AppendAllText(PlacedLog, string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0} {1} {2} {3}\n", a[1], pos.x, pos.y, pos.z));
                 Say(a, $"placed {a[1]} id={go.GetComponent<ZNetView>()?.GetZDO()?.m_uid.ID} at {pos}");
             });
@@ -140,6 +152,7 @@ namespace Greenlings.DevTools
                     System.IO.File.Delete(PlacedLog);
                 }
                 LastPlaced.Clear();
+                _lastTame = null;
                 // and anything a player could have built here (hammer/cultivator pieces), e.g. by hand while testing
                 var buildable = new System.Collections.Generic.HashSet<string>(
                     ObjectDB.instance.m_items.Select(i => i.GetComponent<ItemDrop>()?.m_itemData.m_shared.m_buildPieces)
@@ -225,14 +238,14 @@ namespace Greenlings.DevTools
 
             Cmd("gldev_pat", "press E on the nearest tamed creature", a =>
             {
-                var t = Nearest<Tameable>("Greyling");
+                var t = NearestTame();
                 if (!t) { Say(a, "no greyling"); return; }
                 Say(a, "pat " + (t.Interact(P, false, false) ? "ok" : "refused"));
             });
 
             Cmd("gldev_useitem", "<item> use an item from the inventory on the nearest greyling", a =>
             {
-                var t = Nearest<Tameable>("Greyling");
+                var t = NearestTame();
                 var item = P.GetInventory().GetAllItems().FirstOrDefault(i => i.m_dropPrefab && i.m_dropPrefab.name == a[1]);
                 if (!t || item == null) { Say(a, $"need a greyling and {a[1]} in inventory"); return; }
                 Say(a, "useitem " + (t.UseItem(P, item) ? "ok" : "refused"));
@@ -289,9 +302,17 @@ namespace Greenlings.DevTools
                 Say(a, $"removed {hits.Count} {a[1]}");
             });
 
+            Cmd("gldev_scale", "<prefab> <scale> rescale the most recently placed object of that prefab (local preview only, not saved)", a =>
+            {
+                var go = NearestObject(a[1]);
+                if (!go) { Say(a, "no " + a[1]); return; }
+                go.transform.localScale = Vector3.one * a.TryParameterFloat(2, 1f);
+                Say(a, $"{a[1]} scale {a.TryParameterFloat(2, 1f)}");
+            });
+
             Cmd("gldev_rename", "<name> rename the nearest tamed greyling like Shift+E would", a =>
             {
-                var t = Nearest<Tameable>("Greyling");
+                var t = NearestTame();
                 if (!t) { Say(a, "no greyling"); return; }
                 t.SetText(a[1]);
                 Say(a, "renamed to " + a[1]);
@@ -299,7 +320,7 @@ namespace Greenlings.DevTools
 
             Cmd("gldev_bond", "<0-100> set the nearest tamed greyling's trust (100 = teachable greenling)", a =>
             {
-                var t = Nearest<Tameable>("Greyling");
+                var t = NearestTame();
                 var v = t ? t.GetComponent<ZNetView>() : null;
                 if (!v) { Say(a, "no greyling"); return; }
                 if (!v.IsOwner()) v.ClaimOwnership();
@@ -318,9 +339,31 @@ namespace Greenlings.DevTools
                 }
             });
 
+            Cmd("gldev_hit", "<prefab> [times=1] hit the nearest object of that prefab as the player (chop+pickaxe 60, tier 3)", a =>
+            {
+                var go = NearestObject(a[1]);
+                if (!go) { Say(a, "no " + a[1]); return; }
+                StepTo(go.transform);
+                var col = go.GetComponentInChildren<Collider>();
+                for (var i = 0; i < a.TryParameterInt(2, 1); i++)
+                {
+                    var hit = new HitData { m_point = col ? col.ClosestPoint(P.GetCenterPoint()) : go.transform.position, m_toolTier = 3, m_hitCollider = col };
+                    hit.m_dir = (hit.m_point - P.GetCenterPoint()).normalized;
+                    hit.m_damage.m_chop = 60f;
+                    hit.m_damage.m_pickaxe = 60f;
+                    hit.SetAttacker(P);
+                    if (go.GetComponent<TreeLog>() is TreeLog log) log.Damage(hit);
+                    else if (go.GetComponent<MineRock5>() is MineRock5 m5) m5.Damage(hit);
+                    else if (go.GetComponent<MineRock>() is MineRock m) m.Damage(hit);
+                    else if (go.GetComponent<Destructible>() is Destructible d) d.Damage(hit);
+                    else if (go.GetComponent<TreeBase>() is TreeBase t) t.Damage(hit);
+                }
+                Say(a, "hit " + a[1]);
+            });
+
             Cmd("gldev_tame", "instantly tame the nearest greyling", a =>
             {
-                var t = Nearest<Tameable>("Greyling");
+                var t = NearestTame();
                 if (!t) { Say(a, "no greyling"); return; }
                 t.Tame();
                 Say(a, "tamed");
