@@ -52,6 +52,8 @@ namespace Greenlings
         /// </summary>
         public float Bond => Zdo?.GetFloat(ZBond, 100f) ?? 0f;
         public bool IsStray => IsGreenling && Bond < 100f;
+        /// <summary>Updated every couple of seconds (finding nests isn't free).</summary>
+        public bool HomelessCached { get; private set; }
         public string TraitList => Zdo?.GetString(ZTraits) ?? "";
         public bool Has(string trait) => TraitList.Split(',').Contains(trait);
         public bool IsBonded => IsGreenling && Bond >= 100f;
@@ -154,7 +156,11 @@ namespace Greenlings
         /// <summary>Curiosity wanders toward a mood target that changes on a whim.</summary>
         private void DriftMood()
         {
-            if (!IsOwner || !IsGreenling) return;
+            if (!IsGreenling) return;
+            HomelessCached = Needs.Homeless(this);
+            if (!IsOwner) return;
+            if (Zdo.GetLong(ZLastFed, 0L) == 0L) Zdo.Set(ZLastFed, ZNet.instance.GetTime().Ticks); // start out fed
+            Brain.CheckNeeds();
             if (IsStray && Player.GetClosestPlayer(transform.position, Plugin.BondNearRange.Value))
                 AddBond(Plugin.BondNearPerMinute.Value / 30f, "nearby"); // called every 2s
             var target = Zdo.GetFloat(ZMoodTarget, 40f);
@@ -298,6 +304,7 @@ namespace Greenlings
                 // a new stray: no trust yet, and a name of its own
                 g.Zdo.Set(ZBond, Plugin.StartBond.Value);
                 g.Zdo.Set(ZTraits, Traits.Roll());
+                g.Zdo.Set(ZLastFed, ZNet.instance.GetTime().Ticks);
                 if (__instance.GetText().Length == 0) __instance.SetText(Names.Generate());
                 g.Event("tamed", $"name={__instance.GetText()} bond={g.Bond:0} traits={g.TraitList}");
             }
@@ -306,6 +313,8 @@ namespace Greenlings
         public string MoodWord()
         {
             if (IsStray) return $"stray, trust {Bond:0}%";
+            var needs = Needs.Describe(this);
+            if (needs.Length > 0) return needs;
             var c = Curiosity;
             if (c >= 80) return "eager";
             if (c >= Plugin.LearnThreshold.Value) return "curious";

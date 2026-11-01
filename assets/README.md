@@ -1,44 +1,56 @@
 # Greenlings
 
-Tame greylings with coins and teach them to do your chores.
+Tame greylings (and greydwarfs, and brutes) with coins, earn their trust, and teach them to do your chores.
 
-## Taming
+## Taming and trust
 
-Drop **coins** near a greyling and keep out of sight. It nibbles one coin at a time, and while
-it is fed and calm it slowly warms up to you, just like taming a boar. A tamed greyling turns
-**green** and becomes a **Greenling**. Wild greylings hate greenlings and attack them on sight,
-and greenlings are fragile, so keep them safe.
+Drop **coins** near a wild greyling and stay out of sight. It nibbles them one at a time, like a boar
+eats food, and before long it stops being hostile. It's now a **stray** with a name of its own
+(Grug, Skorby, Bjolf...). It wanders your camp and gets up to mischief, but it won't learn anything yet.
 
-- **Shift+E**: name your greenling.
-- **Use a coin on it** (hotbar): makes it more curious.
+Earn its trust:
+- **Feed it** real food from your hotbar: berries, mushrooms, honey, carrots, cooked meat.
+  Coins only buy interest.
+- **Pat it** (E). It loves this, but a pat only counts every so often.
+- **Spend time near it.**
+
+As trust grows it turns greener and a little plant sprouts from the hollow of its head. At full trust it
+becomes a **Greenling** and can be taught. Every greenling has a trait or two (greedy, lazy, clumsy,
+curious, cuddly, magpie, zoomy, copycat, sleepy) that shows when you hover over it.
+
+Wild greylings hate greenlings and attack them on sight. Greenlings are fragile, so protecting them is your job.
 
 ## Teaching
 
-Greenlings have moods. Hover over one to see whether it is *sulky*, *bored*, *curious* or *eager*.
+1. Make it curious (hover to see its mood). A coin helps.
+2. **Pat it (E).** If it's in the mood, it watches you. Pat again while it watches to make it forget its current job.
+3. **Show it a job** before it gets bored: take something from somewhere, then put it somewhere else.
+4. A little burst of sparkles means it understood. Off it goes, one item at a time.
 
-1. **Pat it (E)** while it is curious. If it is in the mood, it perks up and **watches you**.
-   If not, it swats your hand away, and a coin might change its mind.
-2. **Show it a job** before it gets bored: take something from somewhere, then put it somewhere else.
-3. When it understands, there is a **burst of green light** and it gets to work, carrying items back
-   and forth until the source runs dry or the destination is full. Then it waits nearby and checks again later.
+Several greenlings watching at once all learn the same job.
 
-Things a greenling can learn:
-
-| Take from | Put into |
+| Who | Can learn |
 |---|---|
-| a chest | another chest |
-| items lying on the ground | a smelter, furnace, kiln, windmill, spinning wheel or eitr refinery (ore or fuel) |
-| a beehive, sap extractor, cooking station (done food) or fermenter (finished mead) | a fire, hearth, brazier or torch (fuel) |
-| berry bushes, mushrooms and other pickables around a spot | a cooking station, or a fermenter (mead base) |
+| **Greyling** | chest to chest; picking up loose items; foraging berries, mushrooms and flowers; collecting honey; keeping fires, hearths and torches fed |
+| **Greydwarf** | everything a greyling can, plus running machines (smelter, kiln, furnace, windmill, spinning wheel, cooking station, fermenter), gathering stone and flint, and breaking bushes for wood |
+| **Brute** | only smashing. Hit a log, rock or stump while it watches, and it smashes every one around and leaves the pieces for the little ones to carry |
 
-Idle greenlings get up to mischief: they run around, kick things about, and occasionally "borrow"
-items from your chests and drop them somewhere else.
+## Upkeep
+
+- **Food.** A hungry greenling helps itself to food from the nearest chest that has some.
+- **Nest.** Build a **Greenling Nest** (hammer, furniture tab: 6 wood, 3 resin). Greenlings sleep in it at night.
+
+Neglected greenlings never die or run away, but they work slower, get into more mischief and sometimes just sulk.
+
+## Charm
+
+Greenlings stare at you, copy what you do (badly), bring you little presents and drop them at your
+feet, watch each other's antics, and occasionally "borrow" things from your chests.
 
 ## Configuration
 
-Everything (taming time, curiosity, attention span, carry size, mischief) is in
-`BepInEx/config/greenlings.cfg`.
+Everything is in `BepInEx/config/greenlings.cfg`: taming, bonding, teaching, labor, needs, mischief and visuals.
 
 ## Multiplayer
 
-Every player and the server need the mod. Multiplayer has not been tested much yet.
+Every player and the server need the mod.

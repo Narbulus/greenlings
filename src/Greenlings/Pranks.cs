@@ -24,6 +24,17 @@ namespace Greenlings
         private float _stareFor;
         private Greenling _target;
 
+        private string _food;
+        private Piece _nest;
+
+        /// <summary>Hungry: walk to a chest, take one bite-sized thing, eat it.</summary>
+        public static Prank Meal(Greenling g, Container chest, string food) =>
+            new Prank(g) { Kind = "meal", _chest = chest, _food = food, Detail = food };
+
+        /// <summary>Night: go to the nest and sleep there until morning.</summary>
+        public static Prank Sleep(Greenling g, Piece nest) =>
+            new Prank(g) { Kind = "sleep", _nest = nest, Detail = nest ? nest.GetComponent<ZNetView>().GetZDO().m_uid.ID.ToString() : "?" };
+
         /// <summary>Stop and watch another greenling's antics for a few seconds.</summary>
         public static Prank Watch(Greenling g, Greenling target) =>
             new Prank(g) { Kind = "watch", _target = target, _stareFor = Random.Range(3f, 6f) };
@@ -100,6 +111,8 @@ namespace Greenlings
             switch (Kind)
             {
                 case "stare": return TickStare(dt);
+                case "meal": return TickMeal(dt);
+                case "sleep": return TickSleep(dt);
                 case "watch":
                     if (!_target || _stepTime > _stareFor) return Finish();
                     AI.StopMoving();
@@ -126,6 +139,42 @@ namespace Greenlings
             if (Kind == "scatter" && _step == 0 && _loot) _g.SetCarry(Utils.GetPrefabName(_loot.gameObject), Sources.PickUp(_loot, 1));
             _step++;
             _stepTime = 0f;
+            return true;
+        }
+
+        // ---- needs ---------------------------------------------------------------------------
+
+        private bool TickMeal(float dt)
+        {
+            if (!_chest) return Finish();
+            if (!Arrive(dt, _chest.transform.position, Plugin.StationReach.Value, false)) return true;
+            if (_step == 0)
+            {
+                _g.Character.m_zanim.SetTrigger("attack"); // reach in
+                _step = 1;
+                _stepTime = 0f;
+                return true;
+            }
+            if (_stepTime < 0.8f) return true;
+            var item = _chest.IsInUse() ? null : _chest.GetInventory().GetAllItems().FirstOrDefault(i => Items.PrefabOf(i) == _food);
+            if (item != null)
+            {
+                if (!_chest.m_nview.IsOwner()) _chest.m_nview.ClaimOwnership();
+                _chest.GetInventory().RemoveItem(item, 1);
+                _g.Zdo.Set(Greenling.ZLastFed, ZNet.instance.GetTime().Ticks);
+                _g.Tameable.m_sootheEffect.Create(_g.Character.GetCenterPoint(), Quaternion.identity);
+                _g.Event("meal", $"item={_food} from={Utils.GetPrefabName(_chest.gameObject)}");
+            }
+            Kind = "meal"; // Finish logs mischief_done kind=meal
+            return Finish();
+        }
+
+        private bool TickSleep(float dt)
+        {
+            _time = 0f; // sleeping is allowed to take all night
+            if (!_nest || !Needs.IsNight) { _g.Event("woke"); return Finish(); }
+            if (!Arrive(dt, _nest.transform.position, 1.2f, false) && _stepTime < 40f) return true;
+            AI.StopMoving();
             return true;
         }
 

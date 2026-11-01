@@ -21,6 +21,8 @@ gldev_place RaspberryBush -13 2
 gldev_place RaspberryBush -14 5
 gldev_place RaspberryBush -12 7
 gldev_place RaspberryBush -15 8
+# a nest for the greenlings to sleep in
+gldev_place piece_greenling_nest -8 -1
 # a mess to tidy up
 gldev_drop Wood 8 -3 17
 
@@ -31,6 +33,8 @@ gldev_fill piece_chest_wood TinOre 20
 gldev_fill piece_chest_wood Coal 40
 gldev_fill piece_chest_wood RawMeat 20
 gldev_fill piece_chest_wood MeadBaseHealthMinor 4
+# food for hungry greenlings (they raid the nearest chest with food)
+gldev_fill piece_chest_wood Raspberry 30
 gldev_ready piece_beehive
 
 # --- three trusting greenlings (teachable; they need coins to get curious) ---

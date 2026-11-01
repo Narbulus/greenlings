@@ -64,7 +64,8 @@ namespace Greenlings
                 {
                     j.S("state", g.State.ToString()).N("curiosity", g.Curiosity).S("mood", g.MoodWord())
                      .N("attention", g.Attention).S("task", g.Task?.ToString() ?? "")
-                     .S("carry", g.CarryItem).N("carryN", g.CarryCount);
+                     .S("carry", g.CarryItem).N("carryN", g.CarryCount)
+                     .S("needs", Needs.Describe(g)).S("traits", g.TraitList).N("bond", g.Bond).S("role", Roles.Name(g.Role));
                 }
                 else
                 {

@@ -50,6 +50,13 @@ namespace Greenlings
         internal static ConfigEntry<float> WaitRecheck;
         internal static ConfigEntry<float> StuckTimeout;
         internal static ConfigEntry<float> MischiefChance;
+        internal static ConfigEntry<float> MealInterval;
+        internal static ConfigEntry<float> FoodSearchRange;
+        internal static ConfigEntry<float> NestRange;
+        internal static ConfigEntry<float> NestScale;
+        internal static ConfigEntry<bool> SleepAtNight;
+        internal static ConfigEntry<float> UnmetSlowdown;
+        internal static ConfigEntry<float> SulkChance;
         internal static ConfigEntry<float> BrutePower;
         internal static ConfigEntry<string> GreydwarfPickables;
         internal static ConfigEntry<string> GiftPickables;
@@ -100,6 +107,13 @@ namespace Greenlings
             BrutePower = Config.Bind("Roles", "BrutePower", 40f, "Chop/pickaxe damage per brute whack (splitting logs, smashing rocks).");
             GreydwarfPickables = Config.Bind("Roles", "GreydwarfPickables", "Pickable_Stone,Pickable_Flint,Pickable_Branch",
                 "Pickables that count as greydwarf gathering rather than greyling foraging.");
+            MealInterval = Config.Bind("Needs", "MealInterval", 900f, "Seconds after eating before a greenling is hungry again.");
+            FoodSearchRange = Config.Bind("Needs", "FoodSearchRange", 20f, "How far a hungry greenling looks for a chest with food in it.");
+            NestRange = Config.Bind("Needs", "NestRange", 30f, "A Greenling Nest within this range counts as home.");
+            NestScale = Config.Bind("Needs", "NestScale", 0.38f, "Size of the Greenling Nest relative to the vanilla vulture straw pile (needs a restart).");
+            SleepAtNight = Config.Bind("Needs", "SleepAtNight", true, "Greenlings with a nest go to sleep in it at night.");
+            UnmetSlowdown = Config.Bind("Needs", "UnmetSlowdown", 1.5f, "Work-speed penalty multiplier per unmet need (hungry, no nest).");
+            SulkChance = Config.Bind("Needs", "SulkChance", 0.15f, "Chance per trip that a greenling with both needs unmet sulks for a while instead.");
             MischiefChance = Config.Bind("Mischief", "Chance", 0.015f, "Chance every 2s that an idle greenling starts a prank or a cute moment (x3 when sulky, x2 for strays). 0 disables.");
             MimicChance = Config.Bind("Mischief", "MimicChance", 0.35f, "Chance an idle greenling nearby copies what you just did (copycats: much more).");
             AudienceChance = Config.Bind("Mischief", "AudienceChance", 0.4f, "Chance an idle greenling stops to watch (or joins) another's antics.");

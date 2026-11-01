@@ -42,12 +42,16 @@ namespace Greenlings
         /// <summary>Returns the value MonsterAI.UpdateAI would return (true = AI ran).</summary>
         public bool Tick(float dt)
         {
+            if (_prank != null)
+            {
+                if (!_prank.Tick(dt)) { _prank = null; Enter(Phase.Fetch); }
+                return true;
+            }
             switch (_g.State)
             {
                 case GreenlingState.Watching: TickWatching(dt); break;
                 case GreenlingState.Working: TickWorking(dt); break;
                 default:
-                    if (_prank != null && !_prank.Tick(dt)) _prank = null;
                     break;
             }
             return true;
@@ -129,6 +133,12 @@ namespace Greenlings
 
         private void Fetch(LaborTask task, float dt)
         {
+            // neglected greenlings sometimes just... don't (checked once per trip)
+            if (_phaseTime == 0f && _g.CarryCount == 0 && Needs.Unmet(_g) >= 2 && Random.value < Plugin.SulkChance.Value)
+            {
+                Wait("sulking");
+                return;
+            }
             var src = task.Source;
             var room = _g.CarryPerTrip - _g.CarryCount;
             if (room <= 0) { Enter(Phase.Deliver); return; }
@@ -259,6 +269,30 @@ namespace Greenlings
         }
 
         // ---- mischief ----------------------------------------------------------------------
+
+        private float _nextMealTry;
+
+        /// <summary>Owner, every couple of seconds: go eat or go to bed when needed (never mid-lesson or mid-carry).</summary>
+        internal void CheckNeeds()
+        {
+            if (_prank != null || _g.State == GreenlingState.Watching || _g.CarryCount > 0) return;
+            if (AI.GetTargetCreature()) return;
+
+            if (Plugin.SleepAtNight.Value && Needs.IsNight && !_g.HomelessCached)
+            {
+                _prank = Prank.Sleep(_g, Nest.Near(_g.transform.position, Plugin.NestRange.Value));
+                _g.Event("sleep", "nest=" + _prank.Detail);
+                return;
+            }
+            if (Needs.Hungry(_g) && Time.time > _nextMealTry)
+            {
+                _nextMealTry = Time.time + 60f;
+                var (chest, food) = Needs.FindFood(_g.transform.position);
+                if (!chest) { _g.Event("no_food"); return; }
+                _prank = Prank.Meal(_g, chest, Items.PrefabOf(food));
+                _g.Event("meal_seek", $"item={Items.PrefabOf(food)} chest={Utils.GetPrefabName(chest.gameObject)}");
+            }
+        }
 
         /// <summary>Called by the owner now and then while idle. Sulky greenlings misbehave more.</summary>
         internal void MaybeMisbehave()

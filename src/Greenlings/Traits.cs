@@ -29,14 +29,14 @@ namespace Greenlings
 
         // ---- the numbers ------------------------------------------------------------------
 
-        public static float ActionTime(Greenling g) => g.Has(Lazy) ? 1.7f : 1f;
+        public static float ActionTime(Greenling g) => (g.Has(Lazy) ? 1.7f : 1f) * Needs.Slowdown(g);
         public static float WaitRecheck(Greenling g) => g.Has(Lazy) ? 2f : 1f;
         public static float Attention(Greenling g) => g.Has(Curious) ? 1.5f : 1f;
         public static float CoinCuriosity(Greenling g) => g.Has(Greedy) ? 2f : g.Has(Curious) ? 1.3f : 1f;
         public static float FoodBond(Greenling g) => g.Has(Greedy) ? 0.7f : 1f;
         public static float PatBond(Greenling g) => g.Has(Cuddly) ? 2f : 1f;
         public static float PatCooldown(Greenling g) => g.Has(Cuddly) ? 0.5f : 1f;
-        public static float Mischief(Greenling g) => g.Has(Sleepy) ? 0.4f : g.Has(Zoomy) ? 1.5f : 1f;
+        public static float Mischief(Greenling g) => (g.Has(Sleepy) ? 0.4f : g.Has(Zoomy) ? 1.5f : 1f) * (1f + Needs.Unmet(g));
         public static float FumbleChance(Greenling g) => g.Has(Clumsy) ? 0.12f : 0f;
         public static float MimicChance(Greenling g) => Mathf.Min(1f, Plugin.MimicChance.Value * (g.Has(Copycat) ? 2.5f : 1f));
 
