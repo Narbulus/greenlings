@@ -115,7 +115,8 @@ namespace Greenlings
                 _ => g.MoodWord(),
             };
             if (g.State == GreenlingState.Working && g.CarryCount > 0) status += $", carrying {g.CarryCount} {Items.DisplayName(g.CarryItem)}";
-            var text = $"{__instance.GetHoverName()} ( {status} )" +
+            var traits = g.TraitList.Length > 0 ? $"\n<color=#9ad97c>{g.TraitList.Replace(",", ", ")}</color>" : "";
+            var text = $"{__instance.GetHoverName()} ( {status} ){traits}" +
                        (g.State == GreenlingState.Watching ? "\n[<color=yellow><b>$KEY_Use</b></color>] Never mind (forget its job)"
                                                            : "\n[<color=yellow><b>$KEY_Use</b></color>] Pat") +
                        "\n[<color=yellow><b>$KEY_AltPlace + $KEY_Use</b></color>] $hud_rename";

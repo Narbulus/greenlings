@@ -1,0 +1,28 @@
+# Traits are rolled at taming; idle greenlings copy what you do; they watch each other's antics.
+!include _setup.txt
+gldev_cfg greenlings Mischief MimicChance 1
+gldev_cfg greenlings Mischief AudienceChance 1
+gldev_cfg greenlings Mischief Chance 0
+spawn Greyling 1
+!wait 1
+gldev_tame
+!waitfor GLEVT\] tamed .*traits=[a-z]+ 3
+gldev_bond 100
+!wait 1
+# you wave, it does a happy hop; you swing, it swings at the air
+gldev_act emote wave
+!waitfor GLEVT\] mimic .*action=emote:wave anim=jump 3
+!wait 3.5
+gldev_act swing
+!waitfor GLEVT\] mimic .*action=attack anim=attack 3
+# a second greenling notices the first one's zoomies and joins in
+gldev_place Greyling 2 3
+gldev_tame
+gldev_bond 100
+!wait 1
+gl_prank zoomies
+!waitfor GLEVT\] mischief .*kind=(chase|watch) target= 3
+gl_dump 15
+gldev_cfg greenlings Mischief MimicChance 0.35
+gldev_cfg greenlings Mischief AudienceChance 0.4
+gldev_cfg greenlings Mischief Chance 0.015

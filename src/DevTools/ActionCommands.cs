@@ -307,6 +307,17 @@ namespace Greenlings.DevTools
                 Say(a, $"bond = {a.TryParameterFloat(1, 100f)}");
             });
 
+            Cmd("gldev_act", "<swing|jump|emote name> make the player do something (for mimicry)", a =>
+            {
+                switch (a[1])
+                {
+                    case "swing": Say(a, "swing " + P.StartAttack(null, false)); break;
+                    case "jump": P.Jump(true); Say(a, "jump"); break;
+                    case "emote": Say(a, "emote " + P.StartEmote(a.Length > 2 ? a[2] : "wave")); break;
+                    default: Say(a, "unknown action " + a[1]); break;
+                }
+            });
+
             Cmd("gldev_tame", "instantly tame the nearest greyling", a =>
             {
                 var t = Nearest<Tameable>("Greyling");

@@ -22,6 +22,15 @@ namespace Greenlings
         private Pickable _pickable;
         private Player _player;
         private float _stareFor;
+        private Greenling _target;
+
+        /// <summary>Stop and watch another greenling's antics for a few seconds.</summary>
+        public static Prank Watch(Greenling g, Greenling target) =>
+            new Prank(g) { Kind = "watch", _target = target, _stareFor = Random.Range(3f, 6f) };
+
+        /// <summary>Join in: run after the other one while it has the zoomies.</summary>
+        public static Prank Chase(Greenling g, Greenling target) =>
+            new Prank(g) { Kind = "chase", _target = target, _stareFor = Random.Range(6f, 10f) };
 
         private Prank(Greenling g) { _g = g; }
 
@@ -31,6 +40,7 @@ namespace Greenlings
         {
             var p = new Prank(g);
             var options = new List<string> { "zoomies" };
+            p._target = null;
             var pos = g.transform.position;
 
             p._chest = Object.FindObjectsByType<Container>(FindObjectsSortMode.None)
@@ -50,7 +60,12 @@ namespace Greenlings
                 if (p._loot || p._pickable || p._chest) options.Add("gift");
             }
 
-            p.Kind = kind != null && options.Contains(kind) ? kind : options[Random.Range(0, options.Count)];
+            if (kind != null && options.Contains(kind)) p.Kind = kind;
+            else
+            {
+                var weighted = options.SelectMany(o => Enumerable.Repeat(o, Traits.Weight(g, o))).ToList();
+                p.Kind = weighted[Random.Range(0, weighted.Count)];
+            }
             switch (p.Kind)
             {
                 case "zoomies":
@@ -85,6 +100,15 @@ namespace Greenlings
             switch (Kind)
             {
                 case "stare": return TickStare(dt);
+                case "watch":
+                    if (!_target || _stepTime > _stareFor) return Finish();
+                    AI.StopMoving();
+                    AI.LookAt(_target.Character.GetCenterPoint());
+                    return true;
+                case "chase":
+                    if (!_target || _stepTime > _stareFor) return Finish();
+                    AI.MoveTo(dt, _target.transform.position, 1.5f, true);
+                    return true;
                 case "gift": return TickGift(dt);
                 default: return TickPoints(dt);
             }

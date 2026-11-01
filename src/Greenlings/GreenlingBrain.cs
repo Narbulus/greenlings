@@ -27,6 +27,7 @@ namespace Greenlings
 
         private MonsterAI AI => _g.AI;
         public bool WantsControl => _g.State != GreenlingState.Idle || _prank != null;
+        public bool Busy => _prank != null;
 
         internal void OnStateChanged(GreenlingState s)
         {
@@ -119,7 +120,7 @@ namespace Greenlings
                     if (Vector3.Distance(_g.transform.position, task.Sink.CurrentPos()) > 4f)
                         AI.MoveTo(dt, task.Sink.CurrentPos(), 3f, false);
                     else AI.StopMoving();
-                    if (_phaseTime > Plugin.WaitRecheck.Value) Enter(_g.CarryCount > 0 ? Phase.Deliver : Phase.Fetch);
+                    if (_phaseTime > Plugin.WaitRecheck.Value * Traits.WaitRecheck(_g)) Enter(_g.CarryCount > 0 ? Phase.Deliver : Phase.Fetch);
                     break;
             }
         }
@@ -189,6 +190,15 @@ namespace Greenlings
         private void Deliver(LaborTask task, float dt)
         {
             if (_g.CarryCount <= 0) { Enter(Phase.Fetch); return; }
+            // clumsy ones sometimes drop it on the way (checked once per trip, as it sets off)
+            if (_phaseTime == 0f && Random.value < Traits.FumbleChance(_g))
+            {
+                Prank.Drop(_g.transform.position + _g.transform.forward * 0.5f + Vector3.up * 0.5f, _g.CarryItem, _g.CarryCount);
+                _g.Event("fumble", $"item={_g.CarryItem}");
+                _g.SetCarry("", 0);
+                Enter(Phase.Fetch);
+                return;
+            }
             if (!Arrive(dt, task.Sink.CurrentPos(), Plugin.StationReach.Value)) return;
             AI.LookAt(task.Sink.CurrentPos());
             if (!Act(dt, "throw")) return; // toss it in
@@ -214,7 +224,7 @@ namespace Greenlings
         internal void MaybeMisbehave()
         {
             if (_prank != null || _g.State != GreenlingState.Idle || AI.GetTargetCreature()) return;
-            var chance = Plugin.MischiefChance.Value * (_g.Curiosity < 25f ? 3f : 1f) * (_g.IsStray ? 2f : 1f);
+            var chance = Plugin.MischiefChance.Value * (_g.Curiosity < 25f ? 3f : 1f) * (_g.IsStray ? 2f : 1f) * Traits.Mischief(_g);
             if (Random.value < chance) StartPrank();
         }
 
@@ -222,7 +232,21 @@ namespace Greenlings
         {
             if (_g.State != GreenlingState.Idle) return;
             _prank = Prank.Pick(_g, kind);
-            if (_prank != null) _g.Event("mischief", $"kind={_prank.Kind} {_prank.Detail}".TrimEnd());
+            if (_prank == null) return;
+            _g.Event("mischief", $"kind={_prank.Kind} {_prank.Detail}".TrimEnd());
+            if (_prank.Kind != "watch" && _prank.Kind != "chase") DrawAudience(_prank.Kind);
+        }
+
+        /// <summary>Another greenling is up to something: nearby idle ones may stop to watch, or join a chase.</summary>
+        internal void DrawAudience(string what)
+        {
+            foreach (var other in Greenling.All.Where(o => o && o != _g && o.IsGreenling && o.IsOwner && o.State == GreenlingState.Idle
+                                                         && !o.Brain.Busy && Vector3.Distance(o.transform.position, _g.transform.position) < 12f))
+            {
+                if (Random.value > Plugin.AudienceChance.Value) continue;
+                other.Brain._prank = what == "zoomies" ? Prank.Chase(other, _g) : Prank.Watch(other, _g);
+                other.Event("mischief", $"kind={other.Brain._prank.Kind} target={_g.Label} because={what}");
+            }
         }
 
         // ---- helpers -----------------------------------------------------------------------
@@ -253,7 +277,7 @@ namespace Greenlings
             if (_actTimer < 0f)
             {
                 _g.Character.m_zanim.SetTrigger(trigger);
-                _actTimer = Plugin.ActionTime.Value;
+                _actTimer = Plugin.ActionTime.Value * Traits.ActionTime(_g);
                 return false;
             }
             _actTimer -= dt;

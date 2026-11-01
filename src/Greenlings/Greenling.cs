@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Greenlings
@@ -21,7 +22,7 @@ namespace Greenlings
         internal const string ZState = "gl_state", ZCuriosity = "gl_curiosity", ZMoodTarget = "gl_mood",
             ZTeacher = "gl_teacher", ZAttention = "gl_attention", ZTask = "gl_task",
             ZCarryItem = "gl_carry_item", ZCarryCount = "gl_carry_n",
-            ZBond = "gl_bond", ZLastPat = "gl_last_pat", ZLastFed = "gl_last_fed";
+            ZBond = "gl_bond", ZLastPat = "gl_last_pat", ZLastFed = "gl_last_fed", ZTraits = "gl_traits";
 
         public Character Character { get; private set; }
         public MonsterAI AI { get; private set; }
@@ -49,6 +50,8 @@ namespace Greenlings
         /// </summary>
         public float Bond => Zdo?.GetFloat(ZBond, 100f) ?? 0f;
         public bool IsStray => IsGreenling && Bond < 100f;
+        public string TraitList => Zdo?.GetString(ZTraits) ?? "";
+        public bool Has(string trait) => TraitList.Split(',').Contains(trait);
         public bool IsBonded => IsGreenling && Bond >= 100f;
         public string CarryItem => Zdo?.GetString(ZCarryItem) ?? "";
         public int CarryCount => Zdo?.GetInt(ZCarryCount) ?? 0;
@@ -90,6 +93,7 @@ namespace Greenlings
                 NView.Register("GL_Burst", RPC_Burst);
                 NView.Register<ZDOID>("GL_Affection", RPC_Affection);
                 NView.Register<string, ZDOID>("GL_Feed", RPC_Feed);
+                NView.Register<string, string, ZDOID>("GL_Mimic", RPC_Mimic);
             }
             AI.m_onConsumedItem += item => Event("ate", $"item={Utils.GetPrefabName(item.gameObject)} tameness={Tameable.GetTameness()}%");
             InvokeRepeating(nameof(Refresh), 0f, 1f);
@@ -166,16 +170,26 @@ namespace Greenlings
         private void RPC_Gift(long sender)
         {
             if (!IsOwner) return;
-            AddCuriosity(Plugin.CoinCuriosity.Value, "coin");
+            AddCuriosity(Plugin.CoinCuriosity.Value * Traits.CoinCuriosity(this), "coin");
+        }
+
+        private float _lastMimic;
+
+        private void RPC_Mimic(long sender, string action, string anim, ZDOID player)
+        {
+            if (!IsOwner || !IsGreenling || State != GreenlingState.Idle || Brain.Busy) return;
+            if (Time.time - _lastMimic < 3f || Random.value > Traits.MimicChance(this)) return;
+            _lastMimic = Time.time;
+            StartCoroutine(Mimicry.Copy(this, action, anim));
         }
 
         /// <summary>A pat on a stray: affection, on a cooldown so it can't be spammed.</summary>
         private void RPC_Affection(long sender, ZDOID player)
         {
             if (!IsOwner || !IsStray) return;
-            if (!CooledDown(Zdo, ZLastPat, Plugin.PatCooldown.Value)) { Event("pat_cooldown"); return; }
+            if (!CooledDown(Zdo, ZLastPat, Plugin.PatCooldown.Value * Traits.PatCooldown(this))) { Event("pat_cooldown"); return; }
             Zdo.Set(ZLastPat, ZNet.instance.GetTime().Ticks);
-            AddBond(Plugin.PatBond.Value, "pat");
+            AddBond(Plugin.PatBond.Value * Traits.PatBond(this), "pat");
         }
 
         /// <summary>Food (not coins) builds trust while it is a stray, and lifts its mood once bonded.</summary>
@@ -184,7 +198,7 @@ namespace Greenlings
             if (!IsOwner) return;
             Zdo.Set(ZLastFed, ZNet.instance.GetTime().Ticks);
             Event("fed", $"item={item}");
-            if (IsStray) AddBond(Plugin.FoodBond.Value, "food");
+            if (IsStray) AddBond(Plugin.FoodBond.Value * Traits.FoodBond(this), "food");
             else AddCuriosity(Plugin.FoodCuriosity.Value, "food");
         }
 
@@ -201,7 +215,7 @@ namespace Greenlings
                 return;
             }
             Zdo.Set(ZTeacher, teacher);
-            Zdo.Set(ZAttention, Plugin.AttentionSpan.Value);
+            Zdo.Set(ZAttention, Plugin.AttentionSpan.Value * Traits.Attention(this));
             SetState(GreenlingState.Watching, "pat");
         }
 
@@ -214,6 +228,7 @@ namespace Greenlings
             AddCuriosity(-Plugin.LearnCost.Value, "learned");
             SetState(GreenlingState.Working, "learned");
             NView.InvokeRPC(ZRoutedRpc.Everybody, "GL_Burst");
+            Brain.DrawAudience("learned");
         }
 
         private void RPC_Dismiss(long sender)
@@ -245,6 +260,9 @@ namespace Greenlings
 
         private void Refresh()
         {
+            // greenlings tamed before traits existed get theirs now
+            if (IsGreenling && IsOwner && TraitList.Length == 0) Zdo.Set(ZTraits, Traits.Roll());
+
             // tell nearby players when a stray comes to trust them (every client checks for itself)
             var stray = IsStray;
             if (_wasStray && !stray && IsGreenling && Player.m_localPlayer
@@ -276,8 +294,9 @@ namespace Greenlings
                 if (!(__instance.GetComponent<Greenling>() is Greenling g) || !g.IsGreenling || !g.IsOwner) return;
                 // a new stray: no trust yet, and a name of its own
                 g.Zdo.Set(ZBond, Plugin.StartBond.Value);
+                g.Zdo.Set(ZTraits, Traits.Roll());
                 if (__instance.GetText().Length == 0) __instance.SetText(Names.Generate());
-                g.Event("tamed", $"name={__instance.GetText()} bond={g.Bond:0}");
+                g.Event("tamed", $"name={__instance.GetText()} bond={g.Bond:0} traits={g.TraitList}");
             }
         }
 

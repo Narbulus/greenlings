@@ -51,6 +51,8 @@ namespace Greenlings
         internal static ConfigEntry<float> StuckTimeout;
         internal static ConfigEntry<float> MischiefChance;
         internal static ConfigEntry<string> GiftPickables;
+        internal static ConfigEntry<float> MimicChance;
+        internal static ConfigEntry<float> AudienceChance;
 
         private void Awake()
         {
@@ -94,6 +96,8 @@ namespace Greenlings
             StuckTimeout = Config.Bind("Labor", "StuckTimeout", 30f, "Seconds without reaching a target before giving up on that trip.");
 
             MischiefChance = Config.Bind("Mischief", "Chance", 0.015f, "Chance every 2s that an idle greenling starts a prank or a cute moment (x3 when sulky, x2 for strays). 0 disables.");
+            MimicChance = Config.Bind("Mischief", "MimicChance", 0.35f, "Chance an idle greenling nearby copies what you just did (copycats: much more).");
+            AudienceChance = Config.Bind("Mischief", "AudienceChance", 0.4f, "Chance an idle greenling stops to watch (or joins) another's antics.");
             GiftPickables = Config.Bind("Mischief", "GiftPickables", "Pickable_Stone,Pickable_Flint,Pickable_Branch,Pickable_Mushroom,Pickable_Mushroom_yellow,Pickable_Dandelion,Pickable_Thistle,RaspberryBush,BlueberryBush",
                 "Wild things a greenling may pluck to bring you as a present.");
 
