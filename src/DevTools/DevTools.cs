@@ -218,6 +218,16 @@ namespace Greenlings.DevTools
     [HarmonyPatch(typeof(Terminal), nameof(Terminal.AddString), typeof(string))]
     internal static class MirrorConsoleOutput
     {
-        private static void Postfix(string text) => DevToolsPlugin.Log.LogInfo("[console] " + text);
+        private static bool _busy;
+
+        // Some mods (e.g. "Display BepInEx Info In-Game") echo log lines into the console: mirroring
+        // those back into the log would loop forever, so skip anything that already is a log line.
+        private static void Postfix(string text)
+        {
+            if (_busy || text == null || text.Contains("[console]") || text.StartsWith("[Info") || text.StartsWith("[Message")) return;
+            _busy = true;
+            try { DevToolsPlugin.Log.LogInfo("[console] " + text); }
+            finally { _busy = false; }
+        }
     }
 }
