@@ -1,0 +1,22 @@
+# Greenlings bring you little presents and stare at you.
+!include _setup.txt
+!include _tamed.txt
+# corpses from the cleanup drop resin a moment later: clear it so the flint is the only thing around
+!wait 1
+removedrops
+gldev_drop Flint 1 4 3
+!wait 1
+gl_prank gift
+!waitfor GLEVT\] mischief .*kind=gift from=Flint 3
+!waitfor GLEVT\] gift .*item=Flint 30
+!waitfor GLEVT\] mischief_done .*kind=gift 15
+# nothing lying around: it plucks something instead
+removedrops
+gldev_place Pickable_Mushroom 3 4
+!wait 1
+gl_prank gift
+!waitfor GLEVT\] mischief .*kind=gift from=Pickable_\w+ 3
+!waitfor GLEVT\] gift .*item=\w+ 30
+# and a good long look
+gl_prank stare
+!waitfor GLEVT\] mischief_done .*kind=stare 10

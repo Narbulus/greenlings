@@ -35,7 +35,7 @@ namespace Greenlings
                 args.Context.AddString("gl_burst: " + g.Label);
             }, isCheat: true);
 
-            new Terminal.ConsoleCommand("gl_prank", "[zoomies|misplace|scatter] make the nearest idle greenling misbehave now", args =>
+            new Terminal.ConsoleCommand("gl_prank", "[zoomies|misplace|scatter|stare|gift] make the nearest idle greenling do something now", args =>
             {
                 var p = Player.m_localPlayer;
                 var g = Greenling.All.Where(x => x.IsGreenling && x.IsOwner).OrderBy(x => Vector3.Distance(x.transform.position, p.transform.position)).FirstOrDefault();

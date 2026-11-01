@@ -2,4 +2,6 @@
 spawn Greyling 1
 !wait 1
 gldev_tame
+# skip the stray phase: fully trusting, teachable
+gldev_bond 100
 !wait 1.5

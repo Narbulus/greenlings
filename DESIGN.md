@@ -84,6 +84,29 @@ v1 supported tasks: **fuel/ore into smelter-family stations** (`Smelter` compone
 charcoal kiln, furnace, blast furnace…) and **hauling container → container** (or ground →
 container).
 
+## Roadmap decided 2026-11-01 (second playtest round)
+
+**Two-stage taming.** Coins make a wild greyling interested: it is tamed (not hostile, stays) but is
+a **Stray**: wanders camp, mischief only, can't be taught. **Bonding** (0-100) grows by feeding it
+real food (not coins), pats (with a cooldown), and time spent near the player. It turns gradually
+greener and its head sprout grows with the bond. At 100 it is a **Greenling** and can be taught.
+
+**Charm.** Staring at you; bringing you little gifts (like a cat with a bird); clumsy mimicry of what
+you do; emergent **traits**; greenlings noticing and reacting to each other's antics (but never
+learning jobs from each other). Procedurally generated short Norse-ish names (Grug, Skag, Skorby),
+still renameable.
+
+**Roles.**
+- Greyling: light chores only: chest work, gathering loose items, sorting, keeping torches and braziers lit. No machines.
+- Greydwarf: all of the above plus operating machines (smelters, kilns, cooking), gathering
+  (breaking small bushes, picking up stone/flint), rock-thrower guard.
+- Brute: heavy hauling (more per trip, slower), splitting logs, smashing rocks. Never fells trees.
+- Shaman: later (farming, healing).
+- No weight restriction on items.
+
+**Needs/upkeep.** A nest (buildable piece) and food. Unmet needs mean less productive and more
+unruly; they never die or untame from neglect.
+
 ## Later
 
 Traits (lazy, clever, clumsy), skill progression (faster learning, bigger carries),

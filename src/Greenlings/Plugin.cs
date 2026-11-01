@@ -21,6 +21,15 @@ namespace Greenlings
         internal static ConfigEntry<float> CoinSearchRange;
         internal static ConfigEntry<Color> TamedTint;
 
+        internal static ConfigEntry<float> StartBond;
+        internal static ConfigEntry<float> BondNearPerMinute;
+        internal static ConfigEntry<float> BondNearRange;
+        internal static ConfigEntry<float> PatBond;
+        internal static ConfigEntry<float> PatCooldown;
+        internal static ConfigEntry<float> FoodBond;
+        internal static ConfigEntry<float> FoodCuriosity;
+        internal static ConfigEntry<float> FeedCooldown;
+        internal static ConfigEntry<string> Foods;
         internal static ConfigEntry<float> LearnThreshold;
         internal static ConfigEntry<float> CoinCuriosity;
         internal static ConfigEntry<float> MoodMin;
@@ -41,6 +50,7 @@ namespace Greenlings
         internal static ConfigEntry<float> WaitRecheck;
         internal static ConfigEntry<float> StuckTimeout;
         internal static ConfigEntry<float> MischiefChance;
+        internal static ConfigEntry<string> GiftPickables;
 
         private void Awake()
         {
@@ -56,6 +66,16 @@ namespace Greenlings
             SproutSize = Config.Bind("Visuals", "SproutSize", 2.0f, "Size multiplier for head sprouts.");
             TamedTint = Config.Bind("Visuals", "TamedTint", new Color(0.55f, 1f, 0.45f), "Color multiplied onto a tamed greyling's skin.");
 
+            StartBond = Config.Bind("Bonding", "StartBond", 0f, "Trust (0-100) a greyling has right after taming. At 100 it can be taught.");
+            BondNearPerMinute = Config.Bind("Bonding", "NearbyPerMinute", 1.5f, "Trust gained per minute while a player is nearby.");
+            BondNearRange = Config.Bind("Bonding", "NearbyRange", 15f, "How close a player must be for 'nearby' trust (meters).");
+            PatBond = Config.Bind("Bonding", "PatBond", 4f, "Trust gained per pat (strays).");
+            PatCooldown = Config.Bind("Bonding", "PatCooldown", 45f, "Seconds before another pat counts.");
+            FoodBond = Config.Bind("Bonding", "FoodBond", 10f, "Trust gained per food item (strays).");
+            FoodCuriosity = Config.Bind("Bonding", "FoodCuriosity", 10f, "Curiosity gained per food item once bonded.");
+            FeedCooldown = Config.Bind("Bonding", "FeedCooldown", 60f, "Seconds a greenling stays full after eating.");
+            Foods = Config.Bind("Bonding", "Foods", "Raspberry,Blueberries,Cloudberry,Mushroom,MushroomYellow,Honey,Carrot,Turnip,Onion,CookedMeat,QueensJam",
+                "Items greenlings accept as food (use the item on them). Coins only buy interest.");
             LearnThreshold = Config.Bind("Teaching", "LearnThreshold", 50f, "Curiosity (0-100) needed for a pat to start a lesson.");
             CoinCuriosity = Config.Bind("Teaching", "CoinCuriosity", 25f, "Curiosity gained per coin given.");
             MoodMin = Config.Bind("Teaching", "MoodMin", 10f, "Lowest curiosity a greenling's whims drift toward.");
@@ -73,7 +93,9 @@ namespace Greenlings
             WaitRecheck = Config.Bind("Labor", "WaitRecheck", 5f, "Seconds a waiting greenling idles before checking its task again.");
             StuckTimeout = Config.Bind("Labor", "StuckTimeout", 30f, "Seconds without reaching a target before giving up on that trip.");
 
-            MischiefChance = Config.Bind("Mischief", "Chance", 0.015f, "Chance every 2s that an idle greenling starts a prank (x3 when sulky). 0 disables.");
+            MischiefChance = Config.Bind("Mischief", "Chance", 0.015f, "Chance every 2s that an idle greenling starts a prank or a cute moment (x3 when sulky, x2 for strays). 0 disables.");
+            GiftPickables = Config.Bind("Mischief", "GiftPickables", "Pickable_Stone,Pickable_Flint,Pickable_Branch,Pickable_Mushroom,Pickable_Mushroom_yellow,Pickable_Dandelion,Pickable_Thistle,RaspberryBush,BlueberryBush",
+                "Wild things a greenling may pluck to bring you as a present.");
 
             new Harmony(Id).PatchAll(typeof(Plugin).Assembly);
             Log.LogInfo($"{Name} {Version} loaded");

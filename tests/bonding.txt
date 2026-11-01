@@ -1,0 +1,28 @@
+# A freshly tamed greyling is a stray with a name of its own; trust comes from pats (with a
+# cooldown), food and company; at 100 it becomes a teachable greenling.
+!include _setup.txt
+spawn Greyling 1
+!wait 1
+gldev_tame
+!waitfor GLEVT\] tamed .*name=\w+ bond=0 3
+# a pat on a stray is affection, not teaching
+gldev_pat
+!waitfor GLEVT\] bond .*reason=pat 3
+gldev_pat
+!waitfor GLEVT\] pat_cooldown 3
+# food builds trust; coins don't
+gldev_give Raspberry 3
+gldev_useitem Raspberry
+!waitfor GLEVT\] bond .*delta=\+10 .*reason=food 3
+# nearly there: one more meal tips it over
+gldev_bond 95
+gldev_cfg greenlings Bonding FeedCooldown 0
+gldev_useitem Raspberry
+!waitfor GLEVT\] bonded 3
+gldev_cfg greenlings Bonding FeedCooldown 60
+# now a pat (with a coin for curiosity) starts a lesson
+gldev_give Coins 3
+gldev_useitem Coins
+gldev_pat
+!waitfor GLEVT\] state .*to=Watching 3
+gl_dump 10

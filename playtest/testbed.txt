@@ -33,20 +33,26 @@ gldev_fill piece_chest_wood RawMeat 20
 gldev_fill piece_chest_wood MeadBaseHealthMinor 4
 gldev_ready piece_beehive
 
-# --- three greenlings: Twig is curious, Moss and Pip will need coins ---
+# --- three trusting greenlings (teachable; they need coins to get curious) ---
 gldev_place Greyling -2 3
 gldev_tame
-gldev_rename Twig
+gldev_bond 100
 gldev_place Greyling 0 3.5
 gldev_tame
-gldev_rename Moss
+gldev_bond 100
 gldev_place Greyling 2 3
 gldev_tame
-gldev_rename Pip
+gldev_bond 100
+# --- and a fresh stray to bond with: feed it berries/mushrooms/honey, pat it, keep it company ---
+gldev_place Greyling 4 1
+gldev_tame
+gldev_place Pickable_Mushroom 7 2
+gldev_place Pickable_Dandelion 6 -1
+gldev_place Pickable_Flint 3 -2
 !wait 1
 
 # --- light the cooking fire (needs you standing next to it), then come back ---
 gldev_use fire_pit Wood
 gldev_use fire_pit Wood
 gldev_goto piece_workbench
-gldev_say Testbed ready. Supplies in the small chest, storage in the big one. Coins in your pack. F5: gldev_run testbed_help
+gldev_say Testbed ready. Three greenlings + one new stray (front right). Supplies in the small chest. F5: gldev_run testbed_help

@@ -1,3 +1,4 @@
+using System.Linq;
 using HarmonyLib;
 using UnityEngine;
 
@@ -15,11 +16,24 @@ namespace Greenlings
             return g && g.IsGreenling;
         }
 
+        public static bool IsFood(string prefab) =>
+            prefab != null && Plugin.Foods.Value.Split(',').Any(f => f.Trim() == prefab);
+
         public static void Pat(Greenling g, Humanoid user)
         {
             var player = user as Player;
             if (!player) return;
             var name = g.GetName();
+
+            if (g.IsStray)
+            {
+                // strays can't be taught yet: a pat is just affection (with a cooldown on the trust it builds)
+                g.Tameable.m_petEffect.Create(g.transform.position, g.transform.rotation);
+                player.Message(MessageHud.MessageType.Center, $"{name} leans into your hand");
+                Plugin.Log.LogInfo($"[GLEVT] pat_stray gl={g.Label} bond={g.Bond:0}");
+                g.NView.InvokeRPC("GL_Affection", player.GetZDOID());
+                return;
+            }
 
             if (g.State == GreenlingState.Watching && g.Teacher == player.GetZDOID())
             {
@@ -60,10 +74,28 @@ namespace Greenlings
     {
         private static bool Prefix(Tameable __instance, Humanoid user, ItemDrop.ItemData item, ref bool __result)
         {
-            if (!Interaction.IsGreenling(__instance, out var g) || Items.PrefabOf(item) != Plugin.TameItem.Value) return true;
+            if (!Interaction.IsGreenling(__instance, out var g)) return true;
+            var prefab = Items.PrefabOf(item);
+            if (prefab != Plugin.TameItem.Value)
+            {
+                if (!Interaction.IsFood(prefab)) return true;
+                if (!g.Hungry)
+                {
+                    user.Message(MessageHud.MessageType.Center, $"{g.GetName()} is full");
+                    __result = true;
+                    return false;
+                }
+                user.GetInventory().RemoveItem(item, 1);
+                user.Message(MessageHud.MessageType.Center, $"{g.GetName()} munches the {Items.DisplayName(prefab)} happily");
+                g.Tameable.m_sootheEffect.Create(g.Character.GetCenterPoint(), Quaternion.identity);
+                Plugin.Log.LogInfo($"[GLEVT] feed gl={g.Label} item={prefab}");
+                g.NView.InvokeRPC("GL_Feed", prefab, ((Player)user).GetZDOID());
+                __result = true;
+                return false;
+            }
             user.GetInventory().RemoveItem(item, 1);
             user.Message(MessageHud.MessageType.Center, $"{g.GetName()} snatches the coin and looks at you with interest");
-            Plugin.Log.LogInfo($"[GLEVT] gift gl={g.Label} item={Plugin.TameItem.Value}");
+            Plugin.Log.LogInfo($"[GLEVT] coin gl={g.Label} item={Plugin.TameItem.Value}");
             g.NView.InvokeRPC("GL_Gift");
             __result = true;
             return false;

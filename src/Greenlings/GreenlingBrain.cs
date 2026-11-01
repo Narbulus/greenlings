@@ -214,7 +214,7 @@ namespace Greenlings
         internal void MaybeMisbehave()
         {
             if (_prank != null || _g.State != GreenlingState.Idle || AI.GetTargetCreature()) return;
-            var chance = Plugin.MischiefChance.Value * (_g.Curiosity < 25f ? 3f : 1f);
+            var chance = Plugin.MischiefChance.Value * (_g.Curiosity < 25f ? 3f : 1f) * (_g.IsStray ? 2f : 1f);
             if (Random.value < chance) StartPrank();
         }
 
@@ -280,125 +280,6 @@ namespace Greenlings
             Prank.Drop(_g.transform.position + _g.transform.forward * 0.5f + Vector3.up, _g.CarryItem, _g.CarryCount);
             _g.Event("drop", $"item={_g.CarryItem} n={_g.CarryCount} reason={reason}");
             _g.SetCarry("", 0);
-        }
-    }
-
-    /// <summary>
-    /// Something a bored greenling does instead of being useful. Each prank is a short list of
-    /// points to visit; Tick returns false when it is over.
-    /// </summary>
-    internal class Prank
-    {
-        public string Kind;
-        public string Detail = "";
-        private readonly Greenling _g;
-        private Vector3[] _points;
-        private int _step;
-        private float _time;
-        private float _stepTime;
-        private Container _chest;
-        private ItemDrop _loot;
-
-        private Prank(Greenling g) { _g = g; }
-
-        public static Prank Pick(Greenling g, string kind)
-        {
-            var p = new Prank(g);
-            var options = new System.Collections.Generic.List<string> { "zoomies" };
-            var pos = g.transform.position;
-
-            p._chest = Object.FindObjectsByType<Container>(FindObjectsSortMode.None)
-                .Where(c => Vector3.Distance(c.transform.position, pos) < 15f && !c.IsInUse() && c.GetInventory().NrOfItems() > 0
-                            && c.m_nview && c.m_nview.IsValid() && c.GetComponent<Piece>())
-                .OrderBy(_ => Random.value).FirstOrDefault();
-            if (p._chest) options.Add("misplace");
-
-            p._loot = Physics.OverlapSphere(pos, 12f, LayerMask.GetMask("item"))
-                .Select(c => c.attachedRigidbody ? c.attachedRigidbody.GetComponent<ItemDrop>() : null)
-                .FirstOrDefault(d => d && d.GetComponent<ZNetView>().IsValid());
-            if (p._loot) options.Add("scatter");
-
-            p.Kind = kind != null && options.Contains(kind) ? kind : options[Random.Range(0, options.Count)];
-            switch (p.Kind)
-            {
-                case "zoomies":
-                    p._points = Enumerable.Range(0, 4).Select(_ => RandomPointNear(pos, 4f, 9f)).ToArray();
-                    break;
-                case "misplace":
-                    p._points = new[] { p._chest.transform.position, RandomPointNear(p._chest.transform.position, 5f, 10f) };
-                    p.Detail = $"chest={Utils.GetPrefabName(p._chest.gameObject)}";
-                    break;
-                case "scatter":
-                    p._points = new[] { p._loot.transform.position, RandomPointNear(p._loot.transform.position, 5f, 10f) };
-                    p.Detail = $"item={Utils.GetPrefabName(p._loot.gameObject)}";
-                    break;
-            }
-            return p;
-        }
-
-        public bool Tick(float dt)
-        {
-            _time += dt;
-            _stepTime += dt;
-            if (_time > 40f || _step >= _points.Length) return Finish();
-
-            var ai = _g.AI;
-            var reach = Kind == "zoomies" ? 1f : Plugin.StationReach.Value;
-            var arrived = ai.MoveTo(dt, _points[_step], reach, Kind == "zoomies") ||
-                          (_stepTime > 4f && Vector3.Distance(_g.transform.position, _points[_step]) < reach + 1.5f && ai.m_character.GetVelocity().magnitude < 0.2f) ||
-                          _stepTime > 15f; // unreachable point: move on
-            if (!arrived) return true;
-
-            if (Kind == "misplace" && _step == 0) StealFromChest();
-            if (Kind == "scatter" && _step == 0 && _loot)
-            {
-                var item = Utils.GetPrefabName(_loot.gameObject);
-                _g.SetCarry(item, Sources.PickUp(_loot, 1));
-            }
-            _step++;
-            _stepTime = 0f;
-            return true;
-        }
-
-        private void StealFromChest()
-        {
-            if (!_chest || _chest.IsInUse()) return;
-            var item = _chest.GetInventory().GetAllItems().Where(i => i.m_dropPrefab).OrderBy(_ => Random.value).FirstOrDefault();
-            if (item == null) return;
-            if (!_chest.m_nview.IsOwner()) _chest.m_nview.ClaimOwnership();
-            var n = 1; // small hands
-            var prefab = item.m_dropPrefab.name;
-            _chest.GetInventory().RemoveItem(item, n);
-            _g.SetCarry(prefab, n);
-            _g.Event("mischief_steal", $"item={prefab} n={n}");
-        }
-
-        private bool Finish()
-        {
-            if (_g.CarryCount > 0)
-            {
-                Drop(_g.transform.position + _g.transform.forward * 0.5f + Vector3.up, _g.CarryItem, _g.CarryCount);
-                _g.Event("mischief_drop", $"item={_g.CarryItem} n={_g.CarryCount}");
-                _g.SetCarry("", 0);
-            }
-            _g.Event("mischief_done", "kind=" + Kind);
-            return false;
-        }
-
-        internal static void Drop(Vector3 at, string item, int n)
-        {
-            var prefab = ObjectDB.instance.GetItemPrefab(item);
-            if (!prefab || n <= 0) return;
-            var drop = Object.Instantiate(prefab, at, Quaternion.identity).GetComponent<ItemDrop>();
-            drop.SetStack(n);
-        }
-
-        private static Vector3 RandomPointNear(Vector3 c, float min, float max)
-        {
-            var p = c + Quaternion.Euler(0, Random.Range(0, 360), 0) * Vector3.forward * Random.Range(min, max);
-            ZoneSystem.instance.GetGroundHeight(p, out var y);
-            p.y = y;
-            return p;
         }
     }
 

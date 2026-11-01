@@ -7,3 +7,6 @@ gldev_give CopperOre 10
 gldev_give Coal 10
 gldev_give RawMeat 6
 gldev_give MeadBaseHealthMinor 2
+gldev_give Raspberry 20
+gldev_give Mushroom 10
+gldev_give Honey 5

@@ -297,6 +297,16 @@ namespace Greenlings.DevTools
                 Say(a, "renamed to " + a[1]);
             });
 
+            Cmd("gldev_bond", "<0-100> set the nearest tamed greyling's trust (100 = teachable greenling)", a =>
+            {
+                var t = Nearest<Tameable>("Greyling");
+                var v = t ? t.GetComponent<ZNetView>() : null;
+                if (!v) { Say(a, "no greyling"); return; }
+                if (!v.IsOwner()) v.ClaimOwnership();
+                v.GetZDO().Set("gl_bond", a.TryParameterFloat(1, 100f));
+                Say(a, $"bond = {a.TryParameterFloat(1, 100f)}");
+            });
+
             Cmd("gldev_tame", "instantly tame the nearest greyling", a =>
             {
                 var t = Nearest<Tameable>("Greyling");

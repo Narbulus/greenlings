@@ -52,7 +52,7 @@ namespace Greenlings
 
             var want = _g.IsGreenling ? _g.Zdo.GetString(ZSprout) : "";
             // config changes (height/size) rebuild the sprout, so it can be tuned live with gldev_cfg
-            want += string.Format(CultureInfo.InvariantCulture, "#{0}#{1}", Plugin.SproutHeight.Value, Plugin.SproutSize.Value);
+            want += string.Format(CultureInfo.InvariantCulture, "#{0}#{1}#{2}", Plugin.SproutHeight.Value, Plugin.SproutSize.Value, Growth());
             if (want == _shownSprout) return;
             _shownSprout = want;
             if (_sproutModel) Destroy(_sproutModel);
@@ -63,7 +63,9 @@ namespace Greenlings
             var p = stored.Split('|');
             var prefab = ZNetScene.instance.GetPrefab(p[0]);
             if (!prefab) return;
-            var scale = float.Parse(p[1], CultureInfo.InvariantCulture) * Plugin.SproutSize.Value;
+            var growth = Growth();
+            if (growth <= 0f) return; // not sprouted yet
+            var scale = float.Parse(p[1], CultureInfo.InvariantCulture) * Plugin.SproutSize.Value * growth;
             var yaw = float.Parse(p[2], CultureInfo.InvariantCulture);
             _sproutModel = Models.Visual(prefab, "GreenlingSprout_" + p[0]);
             // head_end points up out of the skull; plant "up" follows it, spun randomly around it
@@ -86,6 +88,17 @@ namespace Greenlings
                 "name={0} renderers={1}/{2} center={3:0.00},{4:0.00},{5:0.00} size={6:0.00},{7:0.00},{8:0.00} bone={9}@{10:0.00},{11:0.00},{12:0.00} boneUp={13:0.0},{14:0.0},{15:0.0} boneScale={16:0.000}",
                 model.name, active, rs.Length, b.center.x, b.center.y, b.center.z, b.size.x, b.size.y, b.size.z,
                 bone.name, bone.position.x, bone.position.y, bone.position.z, bone.up.x, bone.up.y, bone.up.z, bone.lossyScale.x));
+        }
+
+        /// <summary>
+        /// How grown the sprout is: nothing for a brand-new stray, a seedling that grows with trust,
+        /// full size once it is a Greenling. Stepped so the model is not rebuilt constantly.
+        /// </summary>
+        private float Growth()
+        {
+            if (!_g.IsStray) return 1f;
+            var bond = _g.Bond;
+            return bond < 8f ? 0f : Mathf.Round(Mathf.Lerp(0.3f, 0.9f, bond / 100f) * 10f) / 10f;
         }
 
         /// <summary>Owner rolls a sprout once; it is stored in the ZDO so it never changes.</summary>
