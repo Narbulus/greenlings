@@ -224,10 +224,29 @@ def export_creature(coll_name, json_template, out_path):
     out = {"prefab": template["prefab"], "transforms": template["transforms"], "meshes": out_meshes}
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, separators=(",", ":"))
-    # runtime file for the mod: Unity's JsonUtility cannot parse nested arrays, so flat fields only
-    flat_keys = ("renderer", "bones", "bindposesFlat", "vertices", "normals", "uv", "weights", "triangles")
-    runtime = {"prefab": template["prefab"], "meshes": [{k: m[k] for k in flat_keys} for m in out_meshes]}
-    runtime_path = out_path[:-5] + ".runtime.json" if out_path.endswith(".json") else out_path + ".runtime.json"
-    with open(runtime_path, "w", encoding="utf-8") as f:
-        json.dump(runtime, f, separators=(",", ":"))
+    write_glmesh(out_meshes, out_path[:-5] + ".glmesh" if out_path.endswith(".json") else out_path + ".glmesh")
     return {m["renderer"]: len(m["vertices"]) // 3 for m in out_meshes}
+
+
+def write_glmesh(meshes, path):
+    """
+    Runtime model file for the mod: whitespace-separated tokens, plain decimals (no exponents),
+    so the game can parse it without a JSON library.
+        glmesh 1
+        mesh <renderer>
+        <section> <count> <values...>     sections: bones bindposes vertices normals uv weights triangles
+        end
+    """
+    f6 = lambda v: format(float(v), ".6f")
+    lines = ["glmesh 1"]
+    for m in meshes:
+        lines.append("mesh " + m["renderer"])
+        lines.append("bones %d %s" % (len(m["bones"]), " ".join(m["bones"])))
+        for key, name, fmt in (("bindposesFlat", "bindposes", f6), ("vertices", "vertices", f6), ("normals", "normals", f6),
+                               ("uv", "uv", f6), ("weights", "weights", f6), ("triangles", "triangles", str)):
+            vals = m[key]
+            lines.append("%s %d %s" % (name, len(vals), " ".join(fmt(v) for v in vals)))
+        lines.append("end")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(chr(10).join(lines) + chr(10))
+    return path

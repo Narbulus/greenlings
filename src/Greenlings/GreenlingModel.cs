@@ -13,25 +13,53 @@ namespace Greenlings
     /// The new meshes keep the original bone list and bind poses, so the vanilla skeleton and
     /// animations drive them unchanged. Wild greylings keep the vanilla meshes.
     ///
-    /// File: plugins/Greenlings/models/greenling.json (written by tools/blender/greenling_io.py).
+    /// File: plugins/Greenlings/models/greenling.glmesh (written by tools/blender/greenling_io.py).
     /// </summary>
     public class GreenlingModel : MonoBehaviour
     {
-        [Serializable]
-        private class ModelFile
-        {
-            public string prefab;
-            public MeshEntry[] meshes;
-        }
-
-        [Serializable]
         private class MeshEntry
         {
             public string renderer;
             public string[] bones;
-            public float[] bindposesFlat;
-            public float[] vertices, normals, uv, weights;
+            public float[] bindposesFlat, vertices, normals, uv, weights;
             public int[] triangles;
+        }
+
+        /// <summary>
+        /// Parse the .glmesh text format written by tools/blender/greenling_io.py:
+        /// "glmesh 1", then per mesh "mesh &lt;renderer&gt;", sections "&lt;name&gt; &lt;count&gt; &lt;values...&gt;", "end".
+        /// </summary>
+        private static List<MeshEntry> Parse(string text)
+        {
+            var tok = text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries); // any whitespace
+            var i = 0;
+            string Next() => i < tok.Length ? tok[i++] : throw new FormatException("unexpected end of model file");
+            float F(string t) => float.Parse(t, System.Globalization.CultureInfo.InvariantCulture);
+            if (Next() != "glmesh" || Next() != "1") throw new FormatException("not a glmesh v1 file");
+            var list = new List<MeshEntry>();
+            MeshEntry cur = null;
+            while (i < tok.Length)
+            {
+                var word = Next();
+                if (word == "mesh") { cur = new MeshEntry { renderer = Next() }; list.Add(cur); continue; }
+                if (word == "end") { cur = null; continue; }
+                if (cur == null) throw new FormatException("section outside a mesh: " + word);
+                var count = int.Parse(Next());
+                switch (word)
+                {
+                    case "bones": cur.bones = Enumerable.Range(0, count).Select(_ => Next()).ToArray(); break;
+                    case "triangles": cur.triangles = Enumerable.Range(0, count).Select(_ => int.Parse(Next())).ToArray(); break;
+                    default:
+                        var vals = Enumerable.Range(0, count).Select(_ => F(Next())).ToArray();
+                        if (word == "bindposes") cur.bindposesFlat = vals;
+                        else if (word == "vertices") cur.vertices = vals;
+                        else if (word == "normals") cur.normals = vals;
+                        else if (word == "uv") cur.uv = vals;
+                        else if (word == "weights") cur.weights = vals;
+                        break; // unknown sections are skipped (values already consumed)
+                }
+            }
+            return list;
         }
 
         private static Dictionary<string, Mesh> _meshes = new Dictionary<string, Mesh>();
@@ -44,18 +72,18 @@ namespace Greenlings
         private int _applied = -1; // model version currently applied, -1 = vanilla
 
         public static string DefaultPath =>
-            Path.Combine(Path.GetDirectoryName(typeof(GreenlingModel).Assembly.Location), "models", "greenling.json");
+            Path.Combine(Path.GetDirectoryName(typeof(GreenlingModel).Assembly.Location), "models", "greenling.glmesh");
 
         /// <summary>Load (or reload) the model file. Returns a one-line report.</summary>
         public static string Load(string path = null)
         {
             path = path ?? DefaultPath;
             if (!File.Exists(path)) { _meshes = new Dictionary<string, Mesh>(); _version++; return "no model file at " + path; }
-            var file = JsonUtility.FromJson<ModelFile>(File.ReadAllText(path));
-            if (file?.meshes == null || file.meshes.Length == 0) { _meshes = new Dictionary<string, Mesh>(); _version++; return "model file has no meshes (wrong format?): " + path; }
+            var entries = Parse(File.ReadAllText(path));
+            if (entries.Count == 0) { _meshes = new Dictionary<string, Mesh>(); _version++; return "model file has no meshes: " + path; }
             var meshes = new Dictionary<string, Mesh>();
             var bones = new Dictionary<string, string[]>();
-            foreach (var e in file.meshes)
+            foreach (var e in entries)
             {
                 if (e?.vertices == null || e.normals == null || e.triangles == null || e.weights == null || e.bindposesFlat == null || e.bones == null)
                     return $"model file entry {e?.renderer} is incomplete, keeping vanilla look";
