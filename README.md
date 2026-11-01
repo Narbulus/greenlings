@@ -23,14 +23,37 @@ Spiritual successor to [RagnarsRokare/SlaveGreylings](https://github.com/di98fej
 ## Dev loop
 
 ```powershell
-./scripts/dev.ps1 run      # build + deploy to the profile, restart the game, wait until standing in the GLDev world
-./scripts/dev.ps1 cmd "spawn Greyling 3" "!wait 2" "sg_info" "!screenshot check"
+./scripts/dev.ps1 run                                   # build + deploy, restart the game, wait until in the GLDev world
+./scripts/dev.ps1 test tests/teach-smelter.txt tests/teach-haul.txt   # scenario tests, non-zero exit on failure
+./scripts/dev.ps1 cmd "gldev_setup" "spawn Greyling 1" "gl_dump"     # ad-hoc commands against the live game
 ./scripts/dev.ps1 stop
 ```
 
-`cmd` lines are Valheim console commands (cheats on) or DevTools directives:
-`!wait <sec>`, `!screenshot <name>` (saved to `<profile>/BepInEx/devtools/`), `!pos`, `!quit`.
-Console output is mirrored into the BepInEx log and echoed back by the script.
+### Observability
+
+- **`[GLEVT]` log lines**: every greenling decision as a one-line event
+  (`state`, `curiosity`, `pat`, `pat_refused`, `gift`, `demo_source`, `demo_sink`, `lesson`,
+  `learned`, `take`, `deposit`, `wait`, `drop`, `lost_interest`, `task_broken`).
+- **`gl_dump [radius]`**: one JSON line per greenling, greyling, container and smelter nearby (`[GLDUMP] {...}`).
+- Console output is mirrored into the BepInEx log, and `dev.ps1` echoes all of the above.
+
+### Scenario files (`tests/*.txt`)
+
+Lines are console commands or DevTools directives:
+
+| Directive | |
+|---|---|
+| `!waitfor <regex> [timeout]` | Ordered expectation: matches log lines after the previous match. A failure skips the rest and fails the run. |
+| `!wait <sec>` | Plain delay. |
+| `!screenshot <name>` | Saved to `<profile>/BepInEx/devtools/`. |
+| `!pos`, `!quit` | |
+
+DevTools commands that play the player's part through real game code paths:
+`gldev_setup` (god+ghost on, empty inventory), `gldev_clear`, `gldev_place <prefab> <right> <fwd>`,
+`gldev_fill <chest> <item> <n>`, `gldev_open <chest>` / `gldev_close`, `gldev_take` / `gldev_put <item> <n>`,
+`gldev_addore <smelter> <item>`, `gldev_addfuel <smelter>`, `gldev_give <item> <n>`, `gldev_useitem <item>`,
+`gldev_pat`, `gldev_tame`, `gldev_move <right> <fwd>`, `gldev_prefabs <substr>`, `gldev_inspect <prefab>`.
+Commands addressing a prefab use the most recently placed instance, else the nearest one.
 
 DevTools creates a local character and world, both named `GLDev`, on first launch.
 It does not touch your other characters or worlds.

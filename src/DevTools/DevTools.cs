@@ -5,6 +5,8 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace Greenlings.DevTools
@@ -22,6 +24,7 @@ namespace Greenlings.DevTools
         public const string Id = "greenlings.devtools";
 
         internal static ManualLogSource Log;
+        internal static readonly RecentLog Recent = new RecentLog();
         internal static ConfigEntry<bool> AutoStart;
         internal static ConfigEntry<string> CharacterName;
         internal static ConfigEntry<string> WorldName;
@@ -44,6 +47,7 @@ namespace Greenlings.DevTools
             _cmdFile = Path.Combine(_dir, "cmd.txt");
             if (File.Exists(_cmdFile)) File.Delete(_cmdFile);
 
+            BepInEx.Logging.Logger.Listeners.Add(Recent);
             new Harmony(Id).PatchAll(typeof(DevToolsPlugin).Assembly);
             Marker("LOADED");
             InvokeRepeating(nameof(PollCommands), 1f, 0.25f);
@@ -83,10 +87,13 @@ namespace Greenlings.DevTools
 
         private IEnumerator RunLines(string[] lines)
         {
+            var failed = false;
+            var checkpoint = Recent.Seq; // each !waitfor matches events after the previous match
             foreach (var raw in lines)
             {
                 var line = raw.Trim();
                 if (line.Length == 0 || line.StartsWith("#")) continue;
+                if (failed) { Log.LogMessage("[GLDEV] skipped: " + line); continue; }
                 Log.LogMessage("[GLDEV] > " + line);
                 if (line.StartsWith("!"))
                 {
@@ -97,6 +104,27 @@ namespace Greenlings.DevTools
                         case "wait":
                             yield return new WaitForSeconds(float.TryParse(arg, out var s) ? s : 1f);
                             break;
+                        case "waitfor":
+                        {
+                            // !waitfor <regex> [timeoutSeconds]: an ordered expectation, matched against
+                            // log lines since the previous successful !waitfor (or the start of the batch)
+                            var lastSpace = arg.LastIndexOf(' ');
+                            var timeout = 30f;
+                            var pattern = arg;
+                            if (lastSpace > 0 && float.TryParse(arg.Substring(lastSpace + 1), out var t)) { timeout = t; pattern = arg.Substring(0, lastSpace); }
+                            var re = new Regex(pattern);
+                            var deadline = Time.time + timeout;
+                            (long seq, string text)? hit = null;
+                            while (hit == null && Time.time < deadline)
+                            {
+                                hit = Recent.FindSince(checkpoint, re);
+                                if (hit == null) yield return new WaitForSeconds(0.1f);
+                            }
+                            if (hit != null) checkpoint = hit.Value.seq;
+                            if (hit != null) Marker($"PASS waitfor /{pattern}/ after {timeout - (deadline - Time.time):0.0}s");
+                            else { Log.LogError($"[GLDEV] FAIL waitfor /{pattern}/ timed out after {timeout}s"); failed = true; }
+                            break;
+                        }
                         case "screenshot":
                             var name = arg.Length > 0 ? arg : DateTime.Now.ToString("HHmmss");
                             var path = Path.Combine(_dir, name + ".png");
@@ -120,15 +148,46 @@ namespace Greenlings.DevTools
                 }
                 else if (Console.instance != null)
                 {
-                    Console.instance.TryRunCommand(line, silentFail: false, skipAllowedCheck: true);
+                    try { Console.instance.TryRunCommand(line, silentFail: false, skipAllowedCheck: true); }
+                    catch (Exception e)
+                    {
+                        Log.LogError($"[GLDEV] FAIL command '{line}' threw: {e.GetBaseException()}");
+                        failed = true;
+                    }
                 }
                 else
                 {
                     Log.LogWarning("[GLDEV] console not ready, dropped: " + line);
                 }
             }
-            Marker("CMD DONE");
+            Marker(failed ? "CMD DONE (FAILED)" : "CMD DONE");
         }
+    }
+
+    /// <summary>Keeps the last few thousand log lines so !waitfor can match on them.</summary>
+    internal class RecentLog : ILogListener
+    {
+        private readonly Queue<(long seq, string text)> _lines = new Queue<(long, string)>();
+        public long Seq { get; private set; }
+
+        public void LogEvent(object sender, LogEventArgs e)
+        {
+            lock (_lines)
+            {
+                _lines.Enqueue((++Seq, e.ToString()));
+                while (_lines.Count > 4000) _lines.Dequeue();
+            }
+        }
+
+        public (long seq, string text)? FindSince(long seq, Regex re)
+        {
+            lock (_lines)
+                foreach (var (s, text) in _lines)
+                    if (s > seq && re.IsMatch(text) && !text.Contains("[GLDEV]")) return (s, text);
+            return null;
+        }
+
+        public void Dispose() { }
     }
 
     [HarmonyPatch(typeof(Terminal), nameof(Terminal.AddString), typeof(string))]

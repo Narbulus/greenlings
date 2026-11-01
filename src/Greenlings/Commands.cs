@@ -1,50 +1,95 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using HarmonyLib;
 using UnityEngine;
 
 namespace Greenlings
 {
+    /// <summary>
+    /// Observability. gl_dump prints one machine-readable line per greenling / station nearby:
+    ///   [GLDUMP] {"type":"greenling",...}
+    /// Designed for scripts (dev.ps1) and for players filing bug reports.
+    /// </summary>
     [HarmonyPatch(typeof(Terminal), "InitTerminal")]
     internal static class Commands
     {
         private static void Postfix()
         {
-            new Terminal.ConsoleCommand("gl_info", "Greenlings: list creatures near you", args =>
+            new Terminal.ConsoleCommand("gl_dump", "[radius=40] Greenlings: dump greenlings, greylings and stations near you as JSON lines", args =>
             {
                 var player = Player.m_localPlayer;
-                if (player == null) { args.Context.AddString("gl_info: no local player"); return; }
-
-                var nearby = new List<Character>();
-                Character.GetCharactersInRange(player.transform.position, 30f, nearby);
-                var lines = nearby.Where(c => c != player).Select(Describe).ToList();
-                args.Context.AddString($"gl_info v{Plugin.Version}: " + (lines.Any() ? string.Join(" | ", lines) : "nothing within 30m"));
+                if (!player) { args.Context.AddString("gl_dump: no local player"); return; }
+                var radius = args.TryParameterFloat(1, 40f);
+                var lines = Dump(player.transform.position, radius).ToList();
+                foreach (var l in lines) Plugin.Log.LogInfo("[GLDUMP] " + l);
+                args.Context.AddString($"gl_dump: {lines.Count} objects within {radius}m (see log)");
             });
         }
 
-        private static string Describe(Character c)
+        public static IEnumerable<string> Dump(Vector3 at, float radius)
         {
-            var s = $"{Localization.instance.Localize(c.m_name)}";
-            var tame = c.GetComponent<Tameable>();
-            if (tame)
+            var chars = new List<Character>();
+            Character.GetCharactersInRange(at, radius, chars);
+            foreach (var c in chars.Where(c => c.GetComponent<Greenling>()))
             {
-                var name = tame.GetText();
-                if (name.Length > 0) s += $" '{name}'";
-                s += c.IsTamed() ? " tamed" : $" tameness={tame.GetTameness()}% hungry={tame.IsHungry()}";
+                var g = c.GetComponent<Greenling>();
+                var ai = g.AI;
+                var j = new Json()
+                    .S("type", g.IsGreenling ? "greenling" : "greyling")
+                    .S("id", g.Zdo?.m_uid.ID.ToString() ?? "?")
+                    .S("name", g.GetName())
+                    .V("pos", c.transform.position)
+                    .N("hp", c.GetHealth())
+                    .B("owner", g.IsOwner);
+                if (g.IsGreenling)
+                {
+                    j.S("state", g.State.ToString()).N("curiosity", g.Curiosity).S("mood", g.MoodWord())
+                     .N("attention", g.Attention).S("task", g.Task?.ToString() ?? "")
+                     .S("carry", g.CarryItem).N("carryN", g.CarryCount);
+                }
+                else
+                {
+                    j.N("tameness", c.GetComponent<Tameable>()?.GetTameness() ?? 0)
+                     .B("hungry", c.GetComponent<Tameable>()?.IsHungry() ?? false);
+                }
+                if (ai)
+                {
+                    j.S("target", ai.GetTargetCreature() ? Utils.GetPrefabName(ai.GetTargetCreature().gameObject) : "")
+                     .B("alerted", ai.IsAlerted());
+                }
+                yield return j.ToString();
             }
-            var player = Player.m_localPlayer;
-            s += $" d={Vector3.Distance(player.transform.position, c.transform.position):0.0}m";
-            var ai = c.GetBaseAI() as MonsterAI;
-            if (ai)
+
+            foreach (var co in Object.FindObjectsByType<Container>(FindObjectsSortMode.None)
+                         .Where(x => Vector3.Distance(x.transform.position, at) < radius && x.GetComponent<ZNetView>()?.IsValid() == true))
             {
-                if (ai.GetTargetCreature()) s += $" -> attacking {Localization.instance.Localize(ai.GetTargetCreature().m_name)}";
-                if (ai.IsAlerted()) s += " alerted";
-                if (ai.IsSleeping()) s += " asleep";
-                if (ai.DespawnInDay()) s += " despawnInDay";
-                if (ai.IsEventCreature()) s += " event";
-                if (ai.m_consumeTarget) s += $" eating->{ai.m_consumeTarget.name}@{Vector3.Distance(ai.m_consumeTarget.transform.position, c.transform.position):0.0}m";
+                var items = string.Join(",", Items.Counts(co.GetInventory()).Select(kv => $"{kv.Key}x{kv.Value}"));
+                yield return new Json().S("type", "container").S("prefab", Utils.GetPrefabName(co.gameObject))
+                    .S("id", co.GetComponent<ZNetView>().GetZDO().m_uid.ID.ToString()).V("pos", co.transform.position)
+                    .B("inUse", co.IsInUse()).S("items", items).ToString();
             }
-            return s;
+
+            foreach (var s in Object.FindObjectsByType<Smelter>(FindObjectsSortMode.None)
+                         .Where(x => Vector3.Distance(x.transform.position, at) < radius && x.m_nview && x.m_nview.IsValid()))
+            {
+                yield return new Json().S("type", "smelter").S("prefab", Utils.GetPrefabName(s.gameObject))
+                    .S("id", s.m_nview.GetZDO().m_uid.ID.ToString()).V("pos", s.transform.position)
+                    .N("queue", s.GetQueueSize()).N("maxOre", s.m_maxOre)
+                    .N("fuel", s.GetFuel()).N("maxFuel", s.m_maxFuel)
+                    .S("fuelItem", s.m_fuelItem ? s.m_fuelItem.name : "").ToString();
+            }
+        }
+
+        /// <summary>Tiny JSON object builder (no dependency on a JSON library).</summary>
+        private class Json
+        {
+            private readonly List<string> _f = new List<string>();
+            public Json S(string k, string v) { _f.Add($"\"{k}\":\"{(v ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"")}\""); return this; }
+            public Json N(string k, float v) { _f.Add($"\"{k}\":{v.ToString("0.##", CultureInfo.InvariantCulture)}"); return this; }
+            public Json B(string k, bool v) { _f.Add($"\"{k}\":{(v ? "true" : "false")}"); return this; }
+            public Json V(string k, Vector3 v) => S(k, string.Format(CultureInfo.InvariantCulture, "{0:0.0},{1:0.0},{2:0.0}", v.x, v.y, v.z));
+            public override string ToString() => "{" + string.Join(",", _f) + "}";
         }
     }
 }

@@ -27,7 +27,7 @@ namespace Greenlings
             var tame = greyling.GetComponent<Tameable>() ?? greyling.AddComponent<Tameable>();
             tame.m_tamingTime = Plugin.TamingTime.Value;
             tame.m_fedDuration = Plugin.FedDuration.Value;
-            tame.m_commandable = true; // E toggles follow / stay, like wolves (placeholder until teaching)
+            tame.m_commandable = false; // E is Pat (see Interaction)
             tame.m_tamedEffect = boarTame.m_tamedEffect;
             tame.m_sootheEffect = boarTame.m_sootheEffect;
             tame.m_petEffect = boarTame.m_petEffect;

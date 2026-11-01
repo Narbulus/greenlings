@@ -5,15 +5,17 @@
 .EXAMPLE
   ./scripts/dev.ps1 run                 # build, restart game on dev profile, wait until in-world
   ./scripts/dev.ps1 cmd "sg_info" "!screenshot test"   # run console commands / directives in the live game
+  ./scripts/dev.ps1 test tests/teach-smelter.txt      # run scenario files; non-zero exit on failure
   ./scripts/dev.ps1 build               # build + deploy only
   ./scripts/dev.ps1 stop                # close the dev game
   ./scripts/dev.ps1 log [-Lines 80]     # tail the BepInEx log
 
-Directives understood by DevTools (prefix "!"): !wait <sec>, !screenshot <name>, !pos, !quit.
+Directives understood by DevTools (prefix "!"): !wait <sec>, !waitfor <regex> [timeout], !screenshot <name>, !pos, !quit.
+A failed !waitfor skips the rest of the batch and makes the command exit non-zero.
 Anything else is a Valheim console command (cheats are on in the dev world).
 #>
 param(
-    [Parameter(Position = 0)][ValidateSet('run', 'build', 'launch', 'cmd', 'stop', 'log')][string]$Action = 'run',
+    [Parameter(Position = 0)][ValidateSet('run', 'build', 'launch', 'cmd', 'test', 'stop', 'log')][string]$Action = 'run',
     [Parameter(Position = 1, ValueFromRemainingArguments)][string[]]$Commands,
     [int]$Lines = 60,
     [int]$TimeoutSec = 180
@@ -66,7 +68,7 @@ function Wait-Log([string]$Pattern, [long]$From, [int]$Timeout = $TimeoutSec, [s
                 $pos = $fs.Length
             } finally { $fs.Dispose() }
             foreach ($l in ($text -split "`r?`n")) {
-                if ($Echo -and $l -match '\[GLDEV\]|\[console\]|Error|Exception|Greenlings') { Write-Host "  $l" }
+                if ($Echo -and $l -match '\[GLDEV\]|\[console\]|\[GLEVT\]|\[GLDUMP\]|Error|Exception') { Write-Host "  $($l -replace '^\[\w+\s*:[^\]]*\] ', '')" }
                 if ($l -match $Pattern) { return $l }
             }
         }
@@ -101,7 +103,8 @@ function Send-Commands([string[]]$cmds) {
     $tmp = Join-Path $DevDir 'cmd.tmp'
     Set-Content -Path $tmp -Value $cmds -Encoding utf8
     Move-Item -Force $tmp (Join-Path $DevDir 'cmd.txt')  # atomic hand-off
-    Wait-Log '\[GLDEV\] CMD DONE' $from -Echo | Out-Null
+    $done = Wait-Log '\[GLDEV\] CMD DONE' $from -Echo
+    if ($done -match 'FAILED') { throw 'command batch FAILED' }
 }
 
 switch ($Action) {
@@ -109,6 +112,13 @@ switch ($Action) {
     'launch' { Start-DevGame }
     'run'    { Assert-NoOtherGame; Stop-DevGame; Invoke-Build; Start-DevGame }
     'cmd'    { Send-Commands $Commands }
+    'test'   {
+        foreach ($t in $Commands) {
+            Write-Host "== $t"
+            Send-Commands (Get-Content (Resolve-Path $t))
+            Write-Host "== PASS $t"
+        }
+    }
     'stop'   { Stop-DevGame }
     'log'    { Get-Content $Log -Tail $Lines }
 }

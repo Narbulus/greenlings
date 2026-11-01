@@ -1,0 +1,40 @@
+# Teach a greenling to carry copper ore from a chest into a smelter.
+# Run: ./scripts/dev.ps1 test tests/teach-smelter.txt
+gldev_setup
+gldev_clear
+!wait 1
+gldev_place piece_chest_wood -3 4
+gldev_place smelter 4 6
+gldev_fill piece_chest_wood CopperOre 12
+spawn Greyling 1
+!wait 1
+gldev_tame
+!wait 1.5
+
+# not curious enough yet (starts at 40, needs 50): a pat is refused
+gldev_pat
+!waitfor GLEVT\] pat_refused 3
+
+# a coin raises curiosity, then the pat starts a lesson
+gldev_give Coins 5
+gldev_useitem Coins
+!waitfor GLEVT\] curiosity .*reason=coin 3
+gldev_pat
+!waitfor GLEVT\] state .*to=Watching 3
+
+# demonstrate: take ore from the chest, put it in the smelter
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take CopperOre 1
+!waitfor GLEVT\] demo_source item=CopperOre 3
+gldev_close
+gldev_addore smelter CopperOre
+!waitfor GLEVT\] learned 3
+!waitfor GLEVT\] state .*to=Working 3
+
+# it should now do the job by itself
+!waitfor GLEVT] take .*item=CopperOre 30
+!waitfor GLEVT] deposit .*item=CopperOre 30
+!waitfor GLEVT] wait .*reason=sink_full 40
+gl_dump
+!screenshot teach-smelter
