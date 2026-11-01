@@ -20,6 +20,8 @@ Spiritual successor to [RagnarsRokare/SlaveGreylings](https://github.com/di98fej
 - r2modman profile **GreenlingsDev** (BepInExPack only). Paths are in `Directory.Build.props`;
   override per machine in `Directory.Build.user.props`.
 
+See [TESTING.md](TESTING.md) for hands-on playtesting (testbed, commands, what to try).
+
 ## Dev loop
 
 ```powershell

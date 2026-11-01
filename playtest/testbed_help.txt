@@ -1,0 +1,3 @@
+gldev_say Teach: give a coin (hotbar) until curious, press E, then show a job: take from somewhere, put somewhere else.
+gldev_say Jobs: chest->chest, chest->smelter/kiln/hearth/cooking/fermenter, beehive/bushes/ground->chest. E again while it watches = forget job.
+gldev_say Useful: gl_dump (state to log), gl_prank (force mischief), gldev_run testbed_wild (wild greylings), gldev_run testbed (reset).

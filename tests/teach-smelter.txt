@@ -3,7 +3,7 @@
 !include _setup.txt
 gldev_place piece_chest_wood -3 4
 gldev_place smelter 4 6
-gldev_fill piece_chest_wood CopperOre 12
+gldev_fill piece_chest_wood CopperOre 4
 spawn Greyling 1
 !wait 1
 gldev_tame
@@ -35,6 +35,7 @@ gldev_addore smelter CopperOre
 # it should now do the job by itself
 !waitfor GLEVT] take .*item=CopperOre 30
 !waitfor GLEVT] deposit .*item=CopperOre 30
-!waitfor GLEVT] wait .*reason=sink_full 40
+!waitfor GLEVT] deposit .*item=CopperOre 30
+!waitfor GLEVT] wait .*reason=source_empty 40
 gl_dump
 !screenshot teach-smelter

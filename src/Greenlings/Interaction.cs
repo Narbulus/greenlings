@@ -19,7 +19,6 @@ namespace Greenlings
         {
             var player = user as Player;
             if (!player) return;
-            g.Tameable.m_petEffect.Create(g.transform.position, g.transform.rotation);
             var name = g.GetName();
 
             if (g.State == GreenlingState.Watching && g.Teacher == player.GetZDOID())
@@ -33,9 +32,11 @@ namespace Greenlings
             if (g.Curiosity < Plugin.LearnThreshold.Value)
             {
                 player.Message(MessageHud.MessageType.Center, $"{name} swats your hand away. Maybe a coin would help?");
+                g.NView.InvokeRPC(ZRoutedRpc.Everybody, "GL_Swat");
                 Plugin.Log.LogInfo($"[GLEVT] pat_refused gl={g.Label} curiosity={g.Curiosity:0}");
                 return;
             }
+            g.Tameable.m_petEffect.Create(g.transform.position, g.transform.rotation); // a happy pat
             player.Message(MessageHud.MessageType.Center, $"{name} perks up and watches you closely");
             Plugin.Log.LogInfo($"[GLEVT] pat gl={g.Label} curiosity={g.Curiosity:0}");
             g.NView.InvokeRPC("GL_StartWatch", player.GetZDOID());

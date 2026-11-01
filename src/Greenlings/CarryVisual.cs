@@ -1,73 +1,112 @@
+using System.Globalization;
 using System.Linq;
 using UnityEngine;
 
 namespace Greenlings
 {
     /// <summary>
-    /// Shows what a greenling is carrying in its hand. Purely visual and driven by the ZDO, so
-    /// every client renders the same thing.
+    /// Greenling looks that depend on synced state, rendered the same on every client:
+    /// the item it is carrying (right hand) and the plant sprouting from its head.
     /// </summary>
     public class CarryVisual : MonoBehaviour
     {
+        internal const string ZSprout = "gl_sprout"; // "prefab|scale|yaw"
+
         private Greenling _g;
-        private Transform _hand;
-        private GameObject _model;
-        private string _shown = "";
-        private static bool _loggedBone;
+        private Transform _hand, _head, _headTip;
+        private GameObject _carryModel, _sproutModel;
+        private string _shownCarry = "", _shownSprout = "";
 
         private void Awake()
         {
             _g = GetComponent<Greenling>();
-            _hand = FindHand(transform);
-            if (!_loggedBone)
-            {
-                _loggedBone = true;
-                Plugin.Log.LogInfo($"[GLEVT] carry_bone name={(_hand ? _hand.name : "none (using body)")}");
-            }
+            _hand = Models.Find(transform, "r_hand") ?? Models.Find(transform, "l_hand");
+            _head = Models.Find(transform, "head");
+            _headTip = Models.Find(transform, "head_end") ?? _head;
             InvokeRepeating(nameof(Refresh), 0.5f, 0.25f);
-        }
-
-        private static Transform FindHand(Transform root)
-        {
-            var all = root.GetComponentsInChildren<Transform>(true);
-            bool IsRight(string n) => n.StartsWith("r_") || n.Contains(".r") || n.Contains("right") || n.EndsWith("_r");
-            return all.FirstOrDefault(t => t.name.ToLower().Contains("hand") && IsRight(t.name.ToLower()))
-                ?? all.FirstOrDefault(t => t.name.ToLower().Contains("hand"));
         }
 
         private void Refresh()
         {
-            var item = _g.CarryCount > 0 ? _g.CarryItem : "";
-            if (item == _shown) return;
-            _shown = item;
-            if (_model) Destroy(_model);
-            _model = item.Length > 0 ? CreateModel(item) : null;
+            if (_g.Zdo == null) return;
+            RefreshCarry();
+            RefreshSprout();
         }
 
-        private GameObject CreateModel(string item)
+        private void RefreshCarry()
         {
-            var prefab = ObjectDB.instance.GetItemPrefab(item);
-            if (!prefab) return null;
+            var item = _g.CarryCount > 0 ? _g.CarryItem : "";
+            if (item == _shownCarry) return;
+            _shownCarry = item;
+            if (_carryModel) Destroy(_carryModel);
+            _carryModel = null;
+            var prefab = item.Length > 0 ? ObjectDB.instance.GetItemPrefab(item) : null;
+            if (!prefab) return;
+            _carryModel = Models.Visual(prefab, "GreenlingCarry_" + item);
+            Models.Attach(_carryModel, _hand ? _hand : transform, _hand ? Vector3.zero : new Vector3(0f, 0.9f, 0.35f), Quaternion.identity, 0.75f);
+        }
 
-            ZNetView.m_forceDisableInit = true;
-            GameObject go;
-            try { go = Instantiate(prefab); }
-            finally { ZNetView.m_forceDisableInit = false; }
+        private void RefreshSprout()
+        {
+            if (_g.IsGreenling && _g.IsOwner && _g.Zdo.GetString(ZSprout).Length == 0) PickSprout();
 
-            // keep only the looks
-            foreach (var c in go.GetComponentsInChildren<Collider>(true)) DestroyImmediate(c);
-            foreach (var c in go.GetComponentsInChildren<Rigidbody>(true)) DestroyImmediate(c);
-            foreach (var c in go.GetComponentsInChildren<MonoBehaviour>(true)) DestroyImmediate(c);
-            go.name = "GreenlingCarry_" + item;
+            var want = _g.IsGreenling ? _g.Zdo.GetString(ZSprout) : "";
+            // config changes (height/size) rebuild the sprout, so it can be tuned live with gldev_cfg
+            want += string.Format(CultureInfo.InvariantCulture, "#{0}#{1}", Plugin.SproutHeight.Value, Plugin.SproutSize.Value);
+            if (want == _shownSprout) return;
+            _shownSprout = want;
+            if (_sproutModel) Destroy(_sproutModel);
+            _sproutModel = null;
+            var stored = want.Substring(0, want.IndexOf('#'));
+            if (stored.Length == 0 || stored == "none" || !_head) return;
 
-            var parent = _hand ? _hand : transform;
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = _hand ? Vector3.zero : new Vector3(0f, 0.9f, 0.35f);
-            go.transform.localRotation = Quaternion.identity;
-            // undo the bone's scale so items keep their world size (slightly shrunk to fit small hands)
-            var s = parent.lossyScale;
-            go.transform.localScale = new Vector3(0.75f / Mathf.Max(s.x, 0.01f), 0.75f / Mathf.Max(s.y, 0.01f), 0.75f / Mathf.Max(s.z, 0.01f));
-            return go;
+            var p = stored.Split('|');
+            var prefab = ZNetScene.instance.GetPrefab(p[0]);
+            if (!prefab) return;
+            var scale = float.Parse(p[1], CultureInfo.InvariantCulture) * Plugin.SproutSize.Value;
+            var yaw = float.Parse(p[2], CultureInfo.InvariantCulture);
+            _sproutModel = Models.Visual(prefab, "GreenlingSprout_" + p[0]);
+            // head_end points up out of the skull; plant "up" follows it, spun randomly around it
+            // Greylings are hunched: head_end is the tip of the face, the crown is above the middle of the skull.
+            var mid = Vector3.Lerp(_head.position, _headTip.position, 0.45f);
+            var crown = new Vector3(mid.x, _headTip.position.y + Plugin.SproutHeight.Value, mid.z);
+            // upright in the world, spun randomly; follows the head from then on
+            Models.AttachWorld(_sproutModel, _head, crown, Quaternion.Euler(0f, transform.eulerAngles.y + yaw, 0f), scale);
+            LogModel("sprout_model", _sproutModel, _head);
+        }
+
+        /// <summary>Where a visual actually ended up (renderers, world bounds vs. the bone) — for tuning without screenshots.</summary>
+        private void LogModel(string kind, GameObject model, Transform bone)
+        {
+            var rs = model.GetComponentsInChildren<Renderer>(true);
+            var active = rs.Count(r => r.enabled && r.gameObject.activeInHierarchy);
+            var b = rs.Length > 0 ? rs[0].bounds : new Bounds(model.transform.position, Vector3.zero);
+            foreach (var r in rs) b.Encapsulate(r.bounds);
+            _g.Event(kind, string.Format(CultureInfo.InvariantCulture,
+                "name={0} renderers={1}/{2} center={3:0.00},{4:0.00},{5:0.00} size={6:0.00},{7:0.00},{8:0.00} bone={9}@{10:0.00},{11:0.00},{12:0.00} boneUp={13:0.0},{14:0.0},{15:0.0} boneScale={16:0.000}",
+                model.name, active, rs.Length, b.center.x, b.center.y, b.center.z, b.size.x, b.size.y, b.size.z,
+                bone.name, bone.position.x, bone.position.y, bone.position.z, bone.up.x, bone.up.y, bone.up.z, bone.lossyScale.x));
+        }
+
+        /// <summary>Owner rolls a sprout once; it is stored in the ZDO so it never changes.</summary>
+        private void PickSprout()
+        {
+            var options = Plugin.SproutPrefabs.Value.Split(',');
+            var choice = options[Random.Range(0, options.Length)].Trim();
+            if (choice.Length == 0 || !ZNetScene.instance.GetPrefab(choice)) choice = "none";
+            var scale = SproutScale(choice) * Random.Range(0.8f, 1.2f);
+            var value = string.Format(CultureInfo.InvariantCulture, "{0}|{1:0.###}|{2:0}", choice, scale, Random.Range(0f, 360f));
+            _g.Zdo.Set(ZSprout, value);
+            _g.Event("sprout", "plant=" + choice);
+        }
+
+        /// <summary>Plants come in very different sizes; shrink the big ones more.</summary>
+        private static float SproutScale(string prefab)
+        {
+            if (prefab.StartsWith("Pickable_Mushroom")) return 0.35f;
+            if (prefab.StartsWith("Pickable_")) return 0.25f;
+            if (prefab.Contains("sapling")) return 0.2f;
+            return 0.06f; // bushes and shrubs
         }
     }
 }

@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AssemblyName>Greenlings</AssemblyName>
     <RootNamespace>Greenlings</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <IsPlugin>true</IsPlugin>
   </PropertyGroup>
 </Project>

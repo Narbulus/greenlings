@@ -18,7 +18,7 @@ gldev_close
 !waitfor GLEVT\] deposit .*carrying=0 40
 # refill: the greenling has to extract it itself
 gldev_ready piece_beehive
-!waitfor GLEVT\] harvest .*item=Honey 40
+!waitfor GLEVT\] harvest .*item=Honey 60
 !waitfor GLEVT\] take .*item=Honey 20
 !waitfor GLEVT\] deposit .*carrying=0 40
 gl_dump

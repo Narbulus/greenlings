@@ -4,4 +4,11 @@
     <RootNamespace>Greenlings.DevTools</RootNamespace>
     <IsPlugin>true</IsPlugin>
   </PropertyGroup>
+
+  <!-- In-game scripts (gldev_run <name>) live in the repo's playtest/ folder. -->
+  <ItemGroup>
+    <Playtest Include="..\..\playtest\*.txt" />
+    <None Include="@(Playtest)" Link="scripts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <PluginExtraFile Include="@(Playtest->'scripts\%(Filename)%(Extension)')" />
+  </ItemGroup>
 </Project>

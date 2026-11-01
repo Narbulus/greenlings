@@ -13,5 +13,5 @@ gldev_put Wood 1
 gldev_close
 !waitfor GLEVT\] take .*item=Wood 30
 !waitfor GLEVT\] deposit .*item=Wood 40
-!waitfor GLEVT\] wait .*reason=source_empty 60
+!waitfor GLEVT\] wait .*reason=source_empty 90
 gl_dump

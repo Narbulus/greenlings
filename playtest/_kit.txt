@@ -1,0 +1,9 @@
+# What you carry for testing.
+gldev_give Hammer 1
+gldev_give SwordIron 1
+gldev_give Coins 100
+gldev_give Wood 40
+gldev_give CopperOre 10
+gldev_give Coal 10
+gldev_give RawMeat 6
+gldev_give MeadBaseHealthMinor 2

@@ -18,6 +18,7 @@ namespace Greenlings
         private float _actionCooldown;
         private string _lastWaitReason;
         private Prank _prank;
+        private float _actTimer = -1f;
 
         /// <summary>Set while a greenling calls station RPCs, so Teaching ignores them.</summary>
         internal static bool Acting;
@@ -133,8 +134,10 @@ namespace Greenlings
             {
                 if (!Sources.HasWork(src, task.Item, _g.transform.position)) { DeliverOrWait("source_empty"); return; }
                 if (!Arrive(dt, src.CurrentPos(), Plugin.StationReach.Value)) return;
+                AI.LookAt(src.CurrentPos());
+                if (!Act(dt, "attack")) return; // reach in
                 var got = Sources.TakeFromContainer(src, task.Item, room);
-                if (got > 0) { Took(task, got); Enter(Phase.Deliver); }
+                if (got > 0) { ChestSound(src); Took(task, got); Enter(Phase.Deliver); }
                 else DeliverOrWait("source_busy_or_empty");
                 return;
             }
@@ -144,9 +147,11 @@ namespace Greenlings
             if (drop)
             {
                 if (!Arrive(dt, drop.transform.position, 1.2f)) return;
+                AI.LookAt(drop.transform.position);
+                if (!Act(dt, "attack")) return; // scoop it up
                 var n = Sources.PickUp(drop, room);
                 if (n > 0) Took(task, n);
-                Enter(Phase.Fetch); // keep collecting until full or nothing left
+                Enter(_g.CarryCount >= Plugin.CarryMax.Value ? Phase.Deliver : Phase.Fetch); // keep collecting until hands are full
                 return;
             }
 
@@ -156,6 +161,7 @@ namespace Greenlings
             {
                 if (!Arrive(dt, producer.transform.position, Plugin.StationReach.Value)) return;
                 AI.LookAt(producer.transform.position);
+                if (!Act(dt, "attack")) return;
                 Acting = true;
                 try { Sources.Harvest(producer, _g.transform.position); }
                 finally { Acting = false; }
@@ -185,8 +191,7 @@ namespace Greenlings
             if (_g.CarryCount <= 0) { Enter(Phase.Fetch); return; }
             if (!Arrive(dt, task.Sink.CurrentPos(), Plugin.StationReach.Value)) return;
             AI.LookAt(task.Sink.CurrentPos());
-            if (_actionCooldown > 0f) return;
-            _actionCooldown = Plugin.DepositInterval.Value;
+            if (!Act(dt, "throw")) return; // toss it in
 
             bool ok;
             string blocked;
@@ -195,6 +200,7 @@ namespace Greenlings
             finally { Acting = false; }
             if (!ok) { Wait(blocked); return; }
 
+            if (task.Sink.Kind == EndpointKind.Container) ChestSound(task.Sink);
             var left = _g.CarryCount - 1;
             _g.SetCarry(task.Item, left);
             _g.Event("deposit", $"item={task.Item} to={task.Sink} carrying={left}");
@@ -235,6 +241,31 @@ namespace Greenlings
         {
             _phase = p;
             _phaseTime = 0f;
+            _actTimer = -1f;
+        }
+
+        /// <summary>
+        /// Play an animation (synced to all clients) and report true once it has had time to land,
+        /// so taking/putting items is visible instead of instant.
+        /// </summary>
+        private bool Act(float dt, string trigger)
+        {
+            if (_actTimer < 0f)
+            {
+                _g.Character.m_zanim.SetTrigger(trigger);
+                _actTimer = Plugin.ActionTime.Value;
+                return false;
+            }
+            _actTimer -= dt;
+            if (_actTimer > 0f) return false;
+            _actTimer = -1f;
+            return true;
+        }
+
+        private static void ChestSound(Endpoint e)
+        {
+            var c = e.Get<Container>();
+            if (c) c.m_openEffects.Create(c.transform.position, c.transform.rotation);
         }
 
         private void Wait(string reason)
@@ -322,7 +353,7 @@ namespace Greenlings
             if (Kind == "scatter" && _step == 0 && _loot)
             {
                 var item = Utils.GetPrefabName(_loot.gameObject);
-                _g.SetCarry(item, Sources.PickUp(_loot, 999));
+                _g.SetCarry(item, Sources.PickUp(_loot, 1));
             }
             _step++;
             _stepTime = 0f;
@@ -335,7 +366,7 @@ namespace Greenlings
             var item = _chest.GetInventory().GetAllItems().Where(i => i.m_dropPrefab).OrderBy(_ => Random.value).FirstOrDefault();
             if (item == null) return;
             if (!_chest.m_nview.IsOwner()) _chest.m_nview.ClaimOwnership();
-            var n = Mathf.Min(item.m_stack, Random.Range(1, 4));
+            var n = 1; // small hands
             var prefab = item.m_dropPrefab.name;
             _chest.GetInventory().RemoveItem(item, n);
             _g.SetCarry(prefab, n);

@@ -77,6 +77,7 @@ namespace Greenlings
                 NView.Register<ZDOID>("GL_StartWatch", RPC_StartWatch);
                 NView.Register<string>("GL_Learn", RPC_Learn);
                 NView.Register("GL_Dismiss", RPC_Dismiss);
+                NView.Register("GL_Swat", RPC_Swat);
                 NView.Register("GL_Burst", RPC_Burst);
             }
             AI.m_onConsumedItem += item => Event("ate", $"item={Utils.GetPrefabName(item.gameObject)} tameness={Tameable.GetTameness()}%");
@@ -171,10 +172,18 @@ namespace Greenlings
             SetState(GreenlingState.Idle, "dismissed");
         }
 
+        /// <summary>Refused pat: swipe at the hand (no damage) and grumble. Sent to everybody.</summary>
+        private void RPC_Swat(long sender)
+        {
+            if (IsOwner) Character.m_zanim.SetTrigger("attack"); // synced animation, owner drives it
+            Effects.Sound("sfx_greyling_alerted", Character.GetCenterPoint());
+        }
+
         /// <summary>Burst of understanding, played on every client.</summary>
         private void RPC_Burst(long sender)
         {
-            Effects.Understanding(Character.GetTopPoint()); // greylings have no head bone assigned
+            var head = Models.Find(transform, "head_end");
+            Effects.Understanding(head ? head.position : Character.GetTopPoint());
         }
 
         // ---- visuals -----------------------------------------------------------------------

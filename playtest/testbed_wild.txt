@@ -1,0 +1,5 @@
+# Two wild greylings 25m ahead, for taming practice (and for watching them attack your greenlings).
+# Taming: drop coins near one and stay out of sight (sneak or hide behind something); try `ghost` to cheat.
+gldev_place Greyling -3 25
+gldev_place Greyling 3 27
+gldev_say Two wild greylings 25m ahead. Drop coins near them and keep your distance.

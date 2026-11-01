@@ -83,13 +83,22 @@ namespace Greenlings.DevTools
 
         private static void Postfix()
         {
-            Cmd("gldev_setup", "god mode on, ghost mode on, clean inventory (idempotent test preamble)", a =>
+            Cmd("gldev_setup", "[play] tests: god+ghost on, auto-pickup off, empty inventory. 'play': god on, ghost off, auto-pickup on, inventory kept", a =>
             {
+                var play = a.Length > 1 && a[1] == "play";
                 P.SetGodMode(true);
-                P.SetGhostMode(true);
-                P.GetInventory().RemoveAll();
-                Player.m_enableAutoPickup = false; // tests pick things up explicitly
-                Say(a, "setup: god+ghost on, auto-pickup off, inventory emptied");
+                P.SetGhostMode(!play);
+                Player.m_enableAutoPickup = play; // tests pick things up explicitly
+                if (!play) P.GetInventory().RemoveAll();
+                Say(a, play ? "setup: god on, ghost off, auto-pickup on" : "setup: god+ghost on, auto-pickup off, inventory emptied");
+            });
+
+            Cmd("gldev_goto", "<prefab> walk up to the most recently placed (else nearest) object of that prefab", a =>
+            {
+                var go = NearestObject(a[1]);
+                if (!go) { Say(a, "no " + a[1]); return; }
+                StepTo(go.transform);
+                Say(a, "at " + a[1]);
             });
 
             Cmd("gldev_place", "<prefab> <right> <forward> place a prefab relative to the player, snapped to ground", a =>
@@ -131,9 +140,21 @@ namespace Greenlings.DevTools
                     System.IO.File.Delete(PlacedLog);
                 }
                 LastPlaced.Clear();
+                // and anything a player could have built here (hammer/cultivator pieces), e.g. by hand while testing
+                var buildable = new System.Collections.Generic.HashSet<string>(
+                    ObjectDB.instance.m_items.Select(i => i.GetComponent<ItemDrop>()?.m_itemData.m_shared.m_buildPieces)
+                        .Where(t => t != null).SelectMany(t => t.m_pieces).Where(x => x).Select(x => x.name));
+                foreach (var v in Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None))
+                    if (v && v.IsValid() && buildable.Contains(Utils.GetPrefabName(v.gameObject))
+                        && Vector3.Distance(v.transform.position, P.transform.position) < 40f)
+                    {
+                        if (!v.IsOwner()) v.ClaimOwnership();
+                        ZNetScene.instance.Destroy(v.gameObject);
+                        removed++;
+                    }
                 Console.instance.TryRunCommand("killall", true, true);
                 P.StartCoroutine(RemoveDropsSoon()); // corpses drop loot a moment after dying
-                Say(a, $"cleared ({removed} left over from earlier sessions)");
+                Say(a, $"cleared ({removed} more: earlier sessions / hand-built within 40m)");
             });
 
             Cmd("gldev_give", "<item> <n> add items to the player's inventory", a =>
@@ -215,6 +236,43 @@ namespace Greenlings.DevTools
                 var item = P.GetInventory().GetAllItems().FirstOrDefault(i => i.m_dropPrefab && i.m_dropPrefab.name == a[1]);
                 if (!t || item == null) { Say(a, $"need a greyling and {a[1]} in inventory"); return; }
                 Say(a, "useitem " + (t.UseItem(P, item) ? "ok" : "refused"));
+            });
+
+            Cmd("gldev_run", "<script> run a script from the DevTools scripts folder (e.g. testbed)", a =>
+            {
+                if (a.Length < 2)
+                {
+                    var names = System.IO.Directory.Exists(DevToolsPlugin.ScriptDir)
+                        ? System.IO.Directory.GetFiles(DevToolsPlugin.ScriptDir, "*.txt").Select(System.IO.Path.GetFileNameWithoutExtension).Where(n => !n.StartsWith("_"))
+                        : Enumerable.Empty<string>();
+                    Say(a, "scripts: " + string.Join(", ", names));
+                    return;
+                }
+                Say(a, DevToolsPlugin.Instance.RunScript(a[1]) ? "running " + a[1] : "no script " + a[1]);
+            });
+
+            Cmd("gldev_drop", "<item> <n> <right> <forward> drop n single items on the ground at a spot relative to the player", a =>
+            {
+                var prefab = ObjectDB.instance.GetItemPrefab(a[1]);
+                if (!prefab) { Say(a, "no item " + a[1]); return; }
+                var t = P.transform;
+                var at = t.position + t.right * a.TryParameterFloat(3) + t.forward * a.TryParameterFloat(4);
+                ZoneSystem.instance.GetGroundHeight(at, out var y);
+                var n = a.TryParameterInt(2, 1);
+                for (var i = 0; i < n; i++)
+                {
+                    var p = at + new Vector3(Random.Range(-0.8f, 0.8f), 0f, Random.Range(-0.8f, 0.8f));
+                    p.y = y + 0.3f + i * 0.05f;
+                    Object.Instantiate(prefab, p, Quaternion.Euler(0, Random.Range(0, 360), 0));
+                }
+                Say(a, $"dropped {n} {a[1]}");
+            });
+
+            Cmd("gldev_say", "<text...> show a message in the middle of the screen and in the console", a =>
+            {
+                var text = a.FullLine.Substring(a.FullLine.IndexOf(' ') + 1);
+                P.Message(MessageHud.MessageType.Center, text);
+                Say(a, text);
             });
 
             Cmd("gldev_remove", "<prefab> [radius=40] destroy every instance of a prefab near the player", a =>

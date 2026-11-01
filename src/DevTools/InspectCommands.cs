@@ -11,6 +11,21 @@ namespace Greenlings.DevTools
     {
         private static void Postfix()
         {
+            new Terminal.ConsoleCommand("gldev_rig", "[prefab=Greyling] animator parameters and bones of the nearest live instance", args =>
+            {
+                var name = args.Length > 1 ? args[1] : "Greyling";
+                var p = Player.m_localPlayer;
+                var inst = Object.FindObjectsByType<Character>(FindObjectsSortMode.None)
+                    .Where(c => Utils.GetPrefabName(c.gameObject) == name)
+                    .OrderBy(c => Vector3.Distance(c.transform.position, p.transform.position)).FirstOrDefault();
+                if (!inst) { args.Context.AddString("no live " + name); return; }
+                var anim = inst.GetComponentInChildren<Animator>();
+                DevToolsPlugin.Log.LogInfo("[inspect] animator params: " + string.Join(", ", anim.parameters.Select(x => $"{x.name}:{x.type}")));
+                DevToolsPlugin.Log.LogInfo("[inspect] clips: " + string.Join(", ", anim.runtimeAnimatorController.animationClips.Select(c => c.name).Distinct()));
+                DevToolsPlugin.Log.LogInfo("[inspect] bones: " + string.Join(", ", inst.GetComponentsInChildren<Transform>(true).Select(t => t.name)));
+                args.Context.AddString("rig of " + name + " (see log)");
+            });
+
             new Terminal.ConsoleCommand("gldev_inspect", "[prefab] dump components, AI settings and materials", args =>
             {
                 if (args.Length < 2) return;

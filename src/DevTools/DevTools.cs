@@ -6,6 +6,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
@@ -24,6 +25,7 @@ namespace Greenlings.DevTools
         public const string Id = "greenlings.devtools";
 
         internal static ManualLogSource Log;
+        internal static DevToolsPlugin Instance;
         internal static readonly RecentLog Recent = new RecentLog();
         internal static ConfigEntry<bool> AutoStart;
         internal static ConfigEntry<string> CharacterName;
@@ -37,6 +39,7 @@ namespace Greenlings.DevTools
         private void Awake()
         {
             Log = Logger;
+            Instance = this;
             AutoStart = Config.Bind("AutoStart", "Enabled", true, "Skip the menus and load straight into the dev world.");
             CharacterName = Config.Bind("AutoStart", "Character", "GLDev", "Dev character (created if missing).");
             WorldName = Config.Bind("AutoStart", "World", "GLDev", "Dev world (created locally if missing).");
@@ -83,6 +86,28 @@ namespace Greenlings.DevTools
             catch (IOException) { return; } // writer still has it open; try next tick
 
             StartCoroutine(RunLines(lines));
+        }
+
+        /// <summary>Folder with in-game scripts (deployed from the repo's playtest/ folder).</summary>
+        internal static string ScriptDir => Path.Combine(Path.GetDirectoryName(typeof(DevToolsPlugin).Assembly.Location), "scripts");
+
+        /// <summary>Run a script file from <see cref="ScriptDir"/> (same syntax as dev.ps1 tests, !include supported).</summary>
+        internal bool RunScript(string name)
+        {
+            var path = Path.Combine(ScriptDir, name.EndsWith(".txt") ? name : name + ".txt");
+            if (!File.Exists(path)) return false;
+            StartCoroutine(RunLines(Expand(path).ToArray()));
+            return true;
+        }
+
+        private static IEnumerable<string> Expand(string path)
+        {
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var t = line.Trim();
+                if (t.StartsWith("!include ")) foreach (var l in Expand(Path.Combine(Path.GetDirectoryName(path), t.Substring(9).Trim()))) yield return l;
+                else yield return line;
+            }
         }
 
         private IEnumerator RunLines(string[] lines)

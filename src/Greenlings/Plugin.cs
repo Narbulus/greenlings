@@ -11,7 +11,7 @@ namespace Greenlings
     {
         public const string Id = "greenlings";
         public const string Name = "Greenlings";
-        public const string Version = "0.4.0";
+        public const string Version = "0.5.0";
 
         internal static ManualLogSource Log;
 
@@ -30,11 +30,14 @@ namespace Greenlings
         internal static ConfigEntry<float> AttentionSpan;
         internal static ConfigEntry<float> WatchFollowDistance;
         internal static ConfigEntry<float> DemoWindow;
-        internal static ConfigEntry<string> UnderstandingVfx;
+        internal static ConfigEntry<string> UnderstandingSfx;
+        internal static ConfigEntry<string> SproutPrefabs;
+        internal static ConfigEntry<float> SproutHeight;
+        internal static ConfigEntry<float> SproutSize;
+        internal static ConfigEntry<float> ActionTime;
 
         internal static ConfigEntry<int> CarryMax;
         internal static ConfigEntry<float> StationReach;
-        internal static ConfigEntry<float> DepositInterval;
         internal static ConfigEntry<float> WaitRecheck;
         internal static ConfigEntry<float> StuckTimeout;
         internal static ConfigEntry<float> MischiefChance;
@@ -46,6 +49,11 @@ namespace Greenlings
             TamingTime = Config.Bind("Taming", "TamingTime", 600f, "Seconds of being fed and calm needed to tame a greyling (boars: 1800).");
             FedDuration = Config.Bind("Taming", "FedDuration", 60f, "Seconds one eaten item keeps a greyling fed (taming only progresses while fed).");
             CoinSearchRange = Config.Bind("Taming", "SearchRange", 10f, "How far greylings notice the taming item on the ground (boars notice food at 5m).");
+            SproutPrefabs = Config.Bind("Visuals", "Sprouts",
+                "Pickable_Dandelion,Pickable_Thistle,Pickable_Mushroom,Pickable_Mushroom_yellow,Pickable_Mushroom_blue,Pickable_Flax_Wild,Pickable_Barley_Wild,shrub_2,Bush02_en,VineGreen_sapling",
+                "Plants that can grow on a greenling's head (prefab names; one is picked at random per greenling, empty = none).");
+            SproutHeight = Config.Bind("Visuals", "SproutHeight", 0.28f, "How far above the face the sprout sits (meters).");
+            SproutSize = Config.Bind("Visuals", "SproutSize", 1.2f, "Size multiplier for head sprouts.");
             TamedTint = Config.Bind("Visuals", "TamedTint", new Color(0.55f, 1f, 0.45f), "Color multiplied onto a tamed greyling's skin.");
 
             LearnThreshold = Config.Bind("Teaching", "LearnThreshold", 50f, "Curiosity (0-100) needed for a pat to start a lesson.");
@@ -57,11 +65,11 @@ namespace Greenlings
             AttentionSpan = Config.Bind("Teaching", "AttentionSpan", 60f, "Seconds a greenling watches before losing interest (drains 3x when you are far away).");
             WatchFollowDistance = Config.Bind("Teaching", "WatchFollowDistance", 6f, "A watching greenling follows when you are further than this.");
             DemoWindow = Config.Bind("Teaching", "DemoWindow", 90f, "Max seconds between taking an item and putting it somewhere for it to count as a demonstration.");
-            UnderstandingVfx = Config.Bind("Teaching", "UnderstandingVfx", "fx_guardstone_permitted_add", "Comma-separated effect prefabs for the burst of understanding.");
+            UnderstandingSfx = Config.Bind("Teaching", "UnderstandingSfx", "sfx_secretfound", "Sound played with the little burst of understanding above a greenling's head (empty = none).");
 
-            CarryMax = Config.Bind("Labor", "CarryMax", 10, "Items carried per trip.");
+            CarryMax = Config.Bind("Labor", "CarryMax", 1, "Items carried per trip. Greenlings are small: one at a time.");
+            ActionTime = Config.Bind("Labor", "ActionTime", 0.7f, "Seconds a greenling spends reaching in / tossing an item (plays an animation).");
             StationReach = Config.Bind("Labor", "StationReach", 2.2f, "How close a greenling must get to a station to use it.");
-            DepositInterval = Config.Bind("Labor", "DepositInterval", 0.5f, "Seconds between putting single items into a station.");
             WaitRecheck = Config.Bind("Labor", "WaitRecheck", 5f, "Seconds a waiting greenling idles before checking its task again.");
             StuckTimeout = Config.Bind("Labor", "StuckTimeout", 30f, "Seconds without reaching a target before giving up on that trip.");
 

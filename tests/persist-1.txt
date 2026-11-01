@@ -3,7 +3,7 @@
 !include _setup.txt
 gldev_place piece_chest_wood -4 4
 gldev_place piece_chest 5 8
-gldev_fill piece_chest_wood Wood 200
+gldev_fill piece_chest_wood Wood 60
 !include _watching.txt
 gldev_open piece_chest_wood
 !wait 0.5

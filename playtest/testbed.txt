@@ -1,0 +1,52 @@
+# Greenlings testbed: a small base with every supported station, supplies and three greenlings.
+# In game: F5, then   gldev_run testbed      (run it again any time to reset everything)
+gldev_say Building the Greenlings testbed...
+gldev_clear
+!wait 1
+gldev_setup play
+!include _kit.txt
+
+# --- stations (right, forward from where you stand) ---
+gldev_place piece_workbench 0 -4
+gldev_place piece_chest_wood -5 5
+gldev_place piece_chest 5 5
+gldev_place smelter -10 10
+gldev_place charcoal_kiln -5 12
+gldev_place fire_pit 1 12
+gldev_place piece_cookingstation 1 12
+gldev_place fermenter 7 12
+gldev_place hearth 11 8
+gldev_place piece_beehive 13 3
+gldev_place RaspberryBush -13 2
+gldev_place RaspberryBush -14 5
+gldev_place RaspberryBush -12 7
+gldev_place RaspberryBush -15 8
+# a mess to tidy up
+gldev_drop Wood 8 -3 17
+
+# --- supplies ---
+gldev_fill piece_chest_wood Wood 60
+gldev_fill piece_chest_wood CopperOre 30
+gldev_fill piece_chest_wood TinOre 20
+gldev_fill piece_chest_wood Coal 40
+gldev_fill piece_chest_wood RawMeat 20
+gldev_fill piece_chest_wood MeadBaseHealthMinor 4
+gldev_ready piece_beehive
+
+# --- three greenlings: Twig is curious, Moss and Pip will need coins ---
+gldev_place Greyling -2 3
+gldev_tame
+gldev_rename Twig
+gldev_place Greyling 0 3.5
+gldev_tame
+gldev_rename Moss
+gldev_place Greyling 2 3
+gldev_tame
+gldev_rename Pip
+!wait 1
+
+# --- light the cooking fire (needs you standing next to it), then come back ---
+gldev_use fire_pit Wood
+gldev_use fire_pit Wood
+gldev_goto piece_workbench
+gldev_say Testbed ready. Supplies in the small chest, storage in the big one. Coins in your pack. F5: gldev_run testbed_help
