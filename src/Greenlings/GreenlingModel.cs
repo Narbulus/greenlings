@@ -50,12 +50,15 @@ namespace Greenlings
         public static string Load(string path = null)
         {
             path = path ?? DefaultPath;
-            if (!File.Exists(path)) { _meshes.Clear(); _version++; return "no model file at " + path; }
+            if (!File.Exists(path)) { _meshes = new Dictionary<string, Mesh>(); _version++; return "no model file at " + path; }
             var file = JsonUtility.FromJson<ModelFile>(File.ReadAllText(path));
+            if (file?.meshes == null || file.meshes.Length == 0) { _meshes = new Dictionary<string, Mesh>(); _version++; return "model file has no meshes (wrong format?): " + path; }
             var meshes = new Dictionary<string, Mesh>();
             var bones = new Dictionary<string, string[]>();
             foreach (var e in file.meshes)
             {
+                if (e?.vertices == null || e.normals == null || e.triangles == null || e.weights == null || e.bindposesFlat == null || e.bones == null)
+                    return $"model file entry {e?.renderer} is incomplete, keeping vanilla look";
                 var n = e.vertices.Length / 3;
                 var mesh = new Mesh { name = "Greenling_" + e.renderer };
                 if (n > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
@@ -98,6 +101,12 @@ namespace Greenlings
         }
 
         private void Refresh()
+        {
+            try { RefreshInner(); }
+            catch (Exception e) { Plugin.Log.LogError("model: " + e); Enabled = false; }
+        }
+
+        private void RefreshInner()
         {
             var want = Enabled && _g && _g.IsGreenling && _meshes.Count > 0 ? _version : -1;
             if (want == _applied) return;
@@ -142,9 +151,18 @@ namespace Greenlings
         {
             private static void Postfix(ZNetScene __instance)
             {
-                var greyling = __instance.GetPrefab("Greyling");
-                if (greyling && !greyling.GetComponent<GreenlingModel>()) greyling.AddComponent<GreenlingModel>();
-                Plugin.Log.LogInfo("[GLEVT] model " + Load());
+                // never let a missing/bad model file break world loading
+                try
+                {
+                    var greyling = __instance.GetPrefab("Greyling");
+                    if (greyling && !greyling.GetComponent<GreenlingModel>()) greyling.AddComponent<GreenlingModel>();
+                    Plugin.Log.LogInfo("[GLEVT] model " + Load());
+                }
+                catch (Exception e)
+                {
+                    _meshes = new Dictionary<string, Mesh>();
+                    Plugin.Log.LogError("model: failed to load, keeping vanilla look: " + e);
+                }
             }
         }
 
@@ -159,7 +177,11 @@ namespace Greenlings
                     string report;
                     if (arg == "on") { Enabled = true; _version++; report = "greenling model on"; }
                     else if (arg == "off") { Enabled = false; report = "greenling model off (vanilla look)"; }
-                    else report = Load(arg == "reload" ? null : arg);
+                    else
+                    {
+                        try { report = Load(arg == "reload" ? null : arg); }
+                        catch (Exception e) { report = "model load failed: " + e.Message; Plugin.Log.LogError(e); }
+                    }
                     Plugin.Log.LogInfo("[GLEVT] model " + report);
                     args.Context.AddString(report);
                 }, isCheat: true);

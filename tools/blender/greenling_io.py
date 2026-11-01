@@ -224,4 +224,10 @@ def export_creature(coll_name, json_template, out_path):
     out = {"prefab": template["prefab"], "transforms": template["transforms"], "meshes": out_meshes}
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, separators=(",", ":"))
+    # runtime file for the mod: Unity's JsonUtility cannot parse nested arrays, so flat fields only
+    flat_keys = ("renderer", "bones", "bindposesFlat", "vertices", "normals", "uv", "weights", "triangles")
+    runtime = {"prefab": template["prefab"], "meshes": [{k: m[k] for k in flat_keys} for m in out_meshes]}
+    runtime_path = out_path[:-5] + ".runtime.json" if out_path.endswith(".json") else out_path + ".runtime.json"
+    with open(runtime_path, "w", encoding="utf-8") as f:
+        json.dump(runtime, f, separators=(",", ":"))
     return {m["renderer"]: len(m["vertices"]) // 3 for m in out_meshes}
