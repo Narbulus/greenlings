@@ -1,0 +1,3 @@
+<Project>
+  <!-- standalone tools: do not inherit the mod build settings -->
+</Project>

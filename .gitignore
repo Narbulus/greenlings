@@ -5,3 +5,5 @@ obj/
 Directory.Build.user.props
 .ref/
 dist/
+tools/*/bin/
+tools/*/obj/
