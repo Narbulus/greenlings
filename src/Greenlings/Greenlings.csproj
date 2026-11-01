@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Greenlings</AssemblyName>
+    <RootNamespace>Greenlings</RootNamespace>
+    <Version>0.1.0</Version>
+    <IsPlugin>true</IsPlugin>
+  </PropertyGroup>
+</Project>

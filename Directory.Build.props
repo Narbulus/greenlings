@@ -9,7 +9,7 @@
   <PropertyGroup>
     <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Valheim</GameDir>
     <ManagedDir>$(GameDir)\valheim_Data\Managed</ManagedDir>
-    <R2ProfileDir Condition="'$(R2ProfileDir)' == ''">$(APPDATA)\r2modmanPlus-local\Valheim\profiles\SlaveGreylingsDev</R2ProfileDir>
+    <R2ProfileDir Condition="'$(R2ProfileDir)' == ''">$(APPDATA)\r2modmanPlus-local\Valheim\profiles\GreenlingsDev</R2ProfileDir>
     <BepInExCoreDir>$(R2ProfileDir)\BepInEx\core</BepInExCoreDir>
     <!-- Build copies plugins into the profile (see Directory.Build.targets). Set DeployToProfile=false to skip. -->
     <DeployToProfile Condition="'$(DeployToProfile)' == ''">true</DeployToProfile>

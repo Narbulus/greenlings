@@ -7,19 +7,19 @@ using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
 
-namespace SlaveGreylings.DevTools
+namespace Greenlings.DevTools
 {
     /// <summary>
     /// Dev-only harness plugin. Never shipped with the mod.
     ///  - Boots straight from the main menu into a dedicated dev character + world.
     ///  - Watches BepInEx/devtools/cmd.txt and runs each line (console commands or ! directives).
     ///  - Mirrors in-game console output into the BepInEx log.
-    /// Emits "[SGDEV] ..." log markers that scripts/dev.ps1 waits on.
+    /// Emits "[GLDEV] ..." log markers that scripts/dev.ps1 waits on.
     /// </summary>
-    [BepInPlugin(Id, "SlaveGreylings DevTools", "0.1.0")]
+    [BepInPlugin(Id, "Greenlings DevTools", "0.1.0")]
     public class DevToolsPlugin : BaseUnityPlugin
     {
-        public const string Id = "slavegreylings.devtools";
+        public const string Id = "greenlings.devtools";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> AutoStart;
@@ -35,9 +35,9 @@ namespace SlaveGreylings.DevTools
         {
             Log = Logger;
             AutoStart = Config.Bind("AutoStart", "Enabled", true, "Skip the menus and load straight into the dev world.");
-            CharacterName = Config.Bind("AutoStart", "Character", "SGDev", "Dev character (created if missing).");
-            WorldName = Config.Bind("AutoStart", "World", "SGDev", "Dev world (created locally if missing).");
-            WorldSeed = Config.Bind("AutoStart", "Seed", "SGDevSeed", "Seed used when the dev world is created.");
+            CharacterName = Config.Bind("AutoStart", "Character", "GLDev", "Dev character (created if missing).");
+            WorldName = Config.Bind("AutoStart", "World", "GLDev", "Dev world (created locally if missing).");
+            WorldSeed = Config.Bind("AutoStart", "Seed", "GLDevSeed", "Seed used when the dev world is created.");
 
             _dir = Path.Combine(Paths.BepInExRootPath, "devtools");
             Directory.CreateDirectory(_dir);
@@ -49,7 +49,7 @@ namespace SlaveGreylings.DevTools
             InvokeRepeating(nameof(PollCommands), 1f, 0.25f);
         }
 
-        internal static void Marker(string what) => Log.LogMessage("[SGDEV] " + what);
+        internal static void Marker(string what) => Log.LogMessage("[GLDEV] " + what);
 
         private void Update()
         {
@@ -87,7 +87,7 @@ namespace SlaveGreylings.DevTools
             {
                 var line = raw.Trim();
                 if (line.Length == 0 || line.StartsWith("#")) continue;
-                Log.LogMessage("[SGDEV] > " + line);
+                Log.LogMessage("[GLDEV] > " + line);
                 if (line.StartsWith("!"))
                 {
                     var parts = line.Substring(1).Split(new[] { ' ' }, 2);
@@ -114,7 +114,7 @@ namespace SlaveGreylings.DevTools
                             Application.Quit();
                             break;
                         default:
-                            Log.LogWarning("[SGDEV] unknown directive " + parts[0]);
+                            Log.LogWarning("[GLDEV] unknown directive " + parts[0]);
                             break;
                     }
                 }
@@ -124,7 +124,7 @@ namespace SlaveGreylings.DevTools
                 }
                 else
                 {
-                    Log.LogWarning("[SGDEV] console not ready, dropped: " + line);
+                    Log.LogWarning("[GLDEV] console not ready, dropped: " + line);
                 }
             }
             Marker("CMD DONE");

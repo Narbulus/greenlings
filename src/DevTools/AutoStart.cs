@@ -2,7 +2,7 @@ using System.Collections;
 using HarmonyLib;
 using UnityEngine;
 
-namespace SlaveGreylings.DevTools
+namespace Greenlings.DevTools
 {
     /// <summary>
     /// Drives FejdStartup the same way the menu buttons do: Start Game -> pick/create
@@ -57,7 +57,7 @@ namespace SlaveGreylings.DevTools
             }
             if (world == null)
             {
-                DevToolsPlugin.Log.LogError("[SGDEV] AUTOSTART FAILED: no world " + worldName);
+                DevToolsPlugin.Log.LogError("[GLDEV] AUTOSTART FAILED: no world " + worldName);
                 yield break;
             }
 

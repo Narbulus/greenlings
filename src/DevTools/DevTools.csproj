@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <AssemblyName>SlaveGreylings.DevTools</AssemblyName>
-    <RootNamespace>SlaveGreylings.DevTools</RootNamespace>
+    <AssemblyName>Greenlings.DevTools</AssemblyName>
+    <RootNamespace>Greenlings.DevTools</RootNamespace>
     <IsPlugin>true</IsPlugin>
   </PropertyGroup>
 </Project>
