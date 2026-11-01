@@ -195,6 +195,14 @@ namespace Greenlings.DevTools
                 Say(a, "useitem " + (t.UseItem(P, item) ? "ok" : "refused"));
             });
 
+            Cmd("gldev_rename", "<name> rename the nearest tamed greyling like Shift+E would", a =>
+            {
+                var t = Nearest<Tameable>("Greyling");
+                if (!t) { Say(a, "no greyling"); return; }
+                t.SetText(a[1]);
+                Say(a, "renamed to " + a[1]);
+            });
+
             Cmd("gldev_tame", "instantly tame the nearest greyling", a =>
             {
                 var t = Nearest<Tameable>("Greyling");

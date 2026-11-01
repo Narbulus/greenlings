@@ -1,0 +1,21 @@
+# Part 1 of the persistence check (run part 2 after restarting the game):
+#   ./scripts/dev.ps1 test tests/persist-1.txt; ./scripts/dev.ps1 run; ./scripts/dev.ps1 test tests/persist-2.txt
+!include _setup.txt
+gldev_place piece_chest_wood -4 4
+gldev_place piece_chest 5 8
+gldev_fill piece_chest_wood Wood 200
+!include _watching.txt
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take Wood 5
+gldev_close
+gldev_open piece_chest
+!wait 0.5
+gldev_put Wood 5
+!waitfor GLEVT\] learned .*Wood: Container:piece_chest_wood#\d+ -> Container:piece_chest#\d+ 3
+gldev_close
+gldev_rename Bob
+!waitfor GLEVT\] take .*item=Wood 30
+save
+!wait 3
+gl_dump

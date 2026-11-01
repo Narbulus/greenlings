@@ -121,7 +121,7 @@ switch ($Action) {
     'run'    { Assert-NoOtherGame; Stop-DevGame; Invoke-Build; Start-DevGame }
     'cmd'    { Send-Commands $Commands }
     'test'   {
-        if (-not $Commands) { $Commands = Get-ChildItem "$Root\tests" -Filter '*.txt' | Where-Object { $_.Name -notlike '_*' } | ForEach-Object FullName }
+        if (-not $Commands) { $Commands = Get-ChildItem "$Root\tests" -Filter '*.txt' | Where-Object { $_.Name -notlike '_*' -and $_.Name -notlike 'persist-*' } | ForEach-Object FullName }
         $results = foreach ($t in $Commands) {
             $name = Split-Path $t -Leaf
             Write-Host "== $name"

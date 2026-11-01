@@ -6,6 +6,8 @@ gldev_place piece_cookingstation 3 6
 gldev_fill piece_chest_wood RawMeat 10
 gldev_give Wood 3
 gldev_use fire_pit Wood
+# step back: the greyling spawns in front of the player, not in the fire
+gldev_move 0 -5
 !include _watching.txt
 gldev_open piece_chest_wood
 !wait 0.5

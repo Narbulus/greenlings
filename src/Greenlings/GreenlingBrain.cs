@@ -90,7 +90,7 @@ namespace Greenlings
         {
             var task = _g.Task;
             if (task == null) { _g.SetState(GreenlingState.Idle, "no_task"); return; }
-            if (!task.Sink.Exists() || !task.Source.Exists() || !Sinks.Accepts(task.Sink, task.Item))
+            if (!task.Sink.Exists() || !task.Source.Exists() || (task.Sink.Resolve() && !Sinks.Accepts(task.Sink, task.Item)))
             {
                 _g.Event("task_broken", $"task=\"{task}\"");
                 _g.Zdo.Set(Greenling.ZTask, "");
@@ -100,6 +100,14 @@ namespace Greenlings
 
             _phaseTime += dt;
             _actionCooldown -= dt;
+
+            if (!task.Source.AreaLoaded || !task.Sink.AreaLoaded || (task.Sink.IsStation && !task.Sink.Resolve()) || (task.Source.IsStation && !task.Source.Resolve()))
+            {
+                if (_phase != Phase.Wait) Wait("station_not_loaded");
+                AI.StopMoving();
+                if (_phaseTime > Plugin.WaitRecheck.Value) Enter(Phase.Fetch);
+                return;
+            }
 
             switch (_phase)
             {

@@ -1,0 +1,6 @@
+# Part 2: after a restart the same greenling still knows its job (and its name) and carries on.
+gldev_setup
+!wait 3
+gl_dump
+!waitfor GLDUMP\] .*"name":"Bob".*"state":"Working".*"task":"Wood: Container:piece_chest_wood#\d+ -> Container:piece_chest#\d+" 5
+!waitfor GLEVT\] (take|deposit) .*item=Wood 40

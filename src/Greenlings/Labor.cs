@@ -49,7 +49,41 @@ namespace Greenlings
         public bool SameAs(Endpoint o) =>
             o != null && Kind == o.Kind && (IsStation ? Id == o.Id : Vector3.Distance(Pos, o.Pos) < CollectRadius);
 
-        public GameObject Resolve() => IsStation ? ZNetScene.instance.FindInstance(Id) : null;
+        private GameObject _cached;
+
+        /// <summary>
+        /// The live station object. ZDOIDs are reassigned when a world loads, so fall back to
+        /// "the same kind of piece standing at the same spot" and adopt its new id.
+        /// </summary>
+        public GameObject Resolve()
+        {
+            if (!IsStation) return null;
+            if (_cached) return _cached;
+            var go = Id.IsNone() ? null : ZNetScene.instance.FindInstance(Id);
+            if (go && Prefab.Length > 0 && Utils.GetPrefabName(go) != Prefab) go = null;
+            if (!go) go = FindAtPosition();
+            if (go)
+            {
+                _cached = go;
+                Id = go.GetComponent<ZNetView>().GetZDO().m_uid;
+            }
+            return go;
+        }
+
+        private GameObject FindAtPosition()
+        {
+            if (Prefab.Length == 0) return null;
+            foreach (var c in Physics.OverlapSphere(Pos, 1.5f))
+            {
+                var nview = c.GetComponentInParent<ZNetView>();
+                if (nview && nview.IsValid() && Utils.GetPrefabName(nview.gameObject) == Prefab && Vector3.Distance(nview.transform.position, Pos) < 1f)
+                    return nview.gameObject;
+            }
+            return null;
+        }
+
+        /// <summary>Whether the area around this endpoint is loaded (otherwise "missing" just means "not here yet").</summary>
+        public bool AreaLoaded => ZNetScene.instance.IsAreaReady(Pos);
 
         public T Get<T>() where T : Component => Resolve()?.GetComponent<T>();
 
@@ -60,7 +94,8 @@ namespace Greenlings
             return Pos;
         }
 
-        public bool Exists() => !IsStation || Resolve() != null;
+        /// <summary>False only when the area is loaded and the station is really gone.</summary>
+        public bool Exists() => !IsStation || Resolve() != null || !AreaLoaded;
 
         public override string ToString() =>
             IsStation ? $"{Kind}:{(Resolve() ? Utils.GetPrefabName(Resolve()) : Prefab)}#{Id.ID}"
