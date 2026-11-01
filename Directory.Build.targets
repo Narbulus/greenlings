@@ -1,0 +1,20 @@
+<Project>
+  <!--
+    After each build, copy the plugin into the dev r2modman profile so the next
+    game launch picks it up. Projects opt in with <IsPlugin>true</IsPlugin> and
+    list extra runtime files (paths relative to the output dir) as PluginExtraFile.
+  -->
+  <PropertyGroup>
+    <PluginDeployDir Condition="'$(PluginDeployDir)' == ''">$(R2ProfileDir)\BepInEx\plugins\$(AssemblyName)</PluginDeployDir>
+  </PropertyGroup>
+
+  <Target Name="DeployToR2Profile" AfterTargets="Build" Condition="'$(DeployToProfile)' == 'true' And '$(IsPlugin)' == 'true'">
+    <ItemGroup>
+      <_DeployFile Include="$(TargetName).dll;$(TargetName).pdb;@(PluginExtraFile)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DeployFile->'$(OutDir)%(Identity)')"
+          DestinationFiles="@(_DeployFile->'$(PluginDeployDir)\%(Identity)')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="$(TargetName) deployed -> $(PluginDeployDir)" />
+  </Target>
+</Project>

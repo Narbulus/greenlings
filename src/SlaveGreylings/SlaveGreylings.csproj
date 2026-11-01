@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>SlaveGreylings</AssemblyName>
+    <RootNamespace>SlaveGreylings</RootNamespace>
+    <Version>0.0.1</Version>
+    <IsPlugin>true</IsPlugin>
+  </PropertyGroup>
+</Project>
