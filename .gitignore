@@ -7,3 +7,4 @@ Directory.Build.user.props
 dist/
 tools/*/bin/
 tools/*/obj/
+.work/
