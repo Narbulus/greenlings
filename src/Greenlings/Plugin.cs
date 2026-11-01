@@ -52,8 +52,8 @@ namespace Greenlings
             SproutPrefabs = Config.Bind("Visuals", "Sprouts",
                 "Pickable_Dandelion,Pickable_Thistle,Pickable_Mushroom,Pickable_Mushroom_yellow,Pickable_Mushroom_blue,Pickable_Flax_Wild,Pickable_Barley_Wild,shrub_2,Bush02_en,VineGreen_sapling",
                 "Plants that can grow on a greenling's head (prefab names; one is picked at random per greenling, empty = none).");
-            SproutHeight = Config.Bind("Visuals", "SproutHeight", 0.28f, "How far above the face the sprout sits (meters).");
-            SproutSize = Config.Bind("Visuals", "SproutSize", 1.2f, "Size multiplier for head sprouts.");
+            SproutHeight = Config.Bind("Visuals", "SproutHeight", 0.24f, "How far above the face the sprout sits (meters).");
+            SproutSize = Config.Bind("Visuals", "SproutSize", 2.0f, "Size multiplier for head sprouts.");
             TamedTint = Config.Bind("Visuals", "TamedTint", new Color(0.55f, 1f, 0.45f), "Color multiplied onto a tamed greyling's skin.");
 
             LearnThreshold = Config.Bind("Teaching", "LearnThreshold", 50f, "Curiosity (0-100) needed for a pat to start a lesson.");
@@ -67,7 +67,7 @@ namespace Greenlings
             DemoWindow = Config.Bind("Teaching", "DemoWindow", 90f, "Max seconds between taking an item and putting it somewhere for it to count as a demonstration.");
             UnderstandingSfx = Config.Bind("Teaching", "UnderstandingSfx", "sfx_secretfound", "Sound played with the little burst of understanding above a greenling's head (empty = none).");
 
-            CarryMax = Config.Bind("Labor", "CarryMax", 1, "Items carried per trip. Greenlings are small: one at a time.");
+            CarryMax = Config.Bind("Labor", "CarryPerTrip", 1, "Items carried per trip. Greenlings are small: one at a time.");
             ActionTime = Config.Bind("Labor", "ActionTime", 0.7f, "Seconds a greenling spends reaching in / tossing an item (plays an animation).");
             StationReach = Config.Bind("Labor", "StationReach", 2.2f, "How close a greenling must get to a station to use it.");
             WaitRecheck = Config.Bind("Labor", "WaitRecheck", 5f, "Seconds a waiting greenling idles before checking its task again.");

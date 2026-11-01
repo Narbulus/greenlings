@@ -39,6 +39,9 @@ namespace Greenlings.DevTools
             model.transform.SetPositionAndRotation(studio, Quaternion.identity);
             Object.Destroy(staging);
             foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(true)) smr.updateWhenOffscreen = true;
+            // our camera renders manually, so the animator would think nobody is watching and fall back to the bind pose
+            var animators = model.GetComponentsInChildren<Animator>(true);
+            foreach (var a in animators) a.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             // lights that only matter up here
             var key = new GameObject("PhotoKey").AddComponent<Light>();
@@ -77,13 +80,14 @@ namespace Greenlings.DevTools
                     if (isHead && !head) continue;
                     model.transform.rotation = Quaternion.Euler(0f, yaw, 0f); // camera stays on +Z looking -Z
                     yield return null;
+                    foreach (var a in animators) a.Update(0f); // make sure this frame shows the idle pose
                     var b = Bounds(model);
                     Vector3 center; float half;
                     if (isHead)
                     {
-                        var top = headEnd ? headEnd.position : head.position + Vector3.up * 0.3f;
-                        center = (head.position + top) * 0.5f;
-                        half = Mathf.Max(0.25f, Vector3.Distance(head.position, top) * 1.3f);
+                        // frame head + horns/antlers: a slice of the body height around the head bone
+                        half = Mathf.Max(0.3f, b.size.y * 0.24f);
+                        center = head.position + Vector3.up * half * 0.35f;
                     }
                     else
                     {

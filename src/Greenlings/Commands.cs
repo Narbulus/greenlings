@@ -26,6 +26,15 @@ namespace Greenlings
                 args.Context.AddString($"gl_dump: {lines.Count} objects within {radius}m (see log)");
             });
 
+            new Terminal.ConsoleCommand("gl_burst", "play the burst of understanding on the nearest greenling (for tuning the effect)", args =>
+            {
+                var p = Player.m_localPlayer;
+                var g = Greenling.All.Where(x => x.IsGreenling).OrderBy(x => Vector3.Distance(x.transform.position, p.transform.position)).FirstOrDefault();
+                if (!g) { args.Context.AddString("gl_burst: no greenling nearby"); return; }
+                g.NView.InvokeRPC(ZRoutedRpc.Everybody, "GL_Burst");
+                args.Context.AddString("gl_burst: " + g.Label);
+            }, isCheat: true);
+
             new Terminal.ConsoleCommand("gl_prank", "[zoomies|misplace|scatter] make the nearest idle greenling misbehave now", args =>
             {
                 var p = Player.m_localPlayer;

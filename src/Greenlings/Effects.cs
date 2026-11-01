@@ -23,7 +23,7 @@ namespace Greenlings
             main.loop = false;
             main.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.1f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 0.9f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.07f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.02f, 0.05f);
             main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.55f, 1f, 0.35f), new Color(1f, 0.95f, 0.5f));
             main.gravityModifier = -0.12f; // drift upward
             main.simulationSpace = ParticleSystemSimulationSpace.World;
@@ -31,7 +31,7 @@ namespace Greenlings
 
             var emission = ps.emission;
             emission.rateOverTime = 0f;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 14), new ParticleSystem.Burst(0.15f, 8) });
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 10), new ParticleSystem.Burst(0.15f, 6) });
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Hemisphere;
