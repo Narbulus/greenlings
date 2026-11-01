@@ -1,0 +1,6 @@
+# Tame a greenling, bribe it with a coin, pat it: it is now watching the player.
+!include _tamed.txt
+gldev_give Coins 5
+gldev_useitem Coins
+gldev_pat
+!waitfor GLEVT\] state .*to=Watching 3

@@ -25,6 +25,15 @@ namespace Greenlings
                 foreach (var l in lines) Plugin.Log.LogInfo("[GLDUMP] " + l);
                 args.Context.AddString($"gl_dump: {lines.Count} objects within {radius}m (see log)");
             });
+
+            new Terminal.ConsoleCommand("gl_prank", "[zoomies|misplace|scatter] make the nearest idle greenling misbehave now", args =>
+            {
+                var p = Player.m_localPlayer;
+                var g = Greenling.All.Where(x => x.IsGreenling && x.IsOwner).OrderBy(x => Vector3.Distance(x.transform.position, p.transform.position)).FirstOrDefault();
+                if (!g) { args.Context.AddString("gl_prank: no greenling you own nearby"); return; }
+                g.Brain.StartPrank(args.Length > 1 ? args[1] : null);
+                args.Context.AddString("gl_prank: " + g.Label);
+            }, isCheat: true);
         }
 
         public static IEnumerable<string> Dump(Vector3 at, float radius)
@@ -70,6 +79,26 @@ namespace Greenlings
                     .B("inUse", co.IsInUse()).S("items", items).ToString();
             }
 
+            foreach (var f in Near<Fireplace>(at, radius))
+                yield return Station("fire", f).N("fuel", f.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel)).N("maxFuel", f.m_maxFuel)
+                    .S("fuelItem", f.m_fuelItem ? f.m_fuelItem.name : "").ToString();
+            foreach (var k in Near<CookingStation>(at, radius))
+            {
+                var slots = string.Join(",", Enumerable.Range(0, k.m_slots.Length).Select(i =>
+                {
+                    k.GetSlot(i, out var n, out _, out var st, out _);
+                    return n == "" ? "-" : n + ":" + st;
+                }));
+                yield return Station("cooking", k).S("slots", slots).B("fireLit", !k.m_requireFire || k.IsFireLit()).ToString();
+            }
+            foreach (var h in Near<Beehive>(at, radius)) yield return Station("beehive", h).N("honey", h.GetHoneyLevel()).ToString();
+            foreach (var c in Near<SapCollector>(at, radius)) yield return Station("sap", c).N("level", c.GetLevel()).ToString();
+            foreach (var f in Near<Fermenter>(at, radius)) yield return Station("fermenter", f).S("status", f.GetStatus().ToString()).ToString();
+            var drops = Physics.OverlapSphere(at, radius, LayerMask.GetMask("item"))
+                .Select(c => c.attachedRigidbody ? c.attachedRigidbody.GetComponent<ItemDrop>() : null).Where(d => d)
+                .GroupBy(d => Utils.GetPrefabName(d.gameObject)).Select(g => g.Key + "x" + g.Sum(d => d.m_itemData.m_stack));
+            yield return new Json().S("type", "drops").S("items", string.Join(",", drops)).ToString();
+
             foreach (var s in Object.FindObjectsByType<Smelter>(FindObjectsSortMode.None)
                          .Where(x => Vector3.Distance(x.transform.position, at) < radius && x.m_nview && x.m_nview.IsValid()))
             {
@@ -80,6 +109,14 @@ namespace Greenlings
                     .S("fuelItem", s.m_fuelItem ? s.m_fuelItem.name : "").ToString();
             }
         }
+
+        private static IEnumerable<T> Near<T>(Vector3 at, float radius) where T : MonoBehaviour =>
+            Object.FindObjectsByType<T>(FindObjectsSortMode.None).Where(x => Vector3.Distance(x.transform.position, at) < radius
+                                                                       && x.GetComponent<ZNetView>()?.IsValid() == true);
+
+        private static Json Station(string type, MonoBehaviour m) =>
+            new Json().S("type", type).S("prefab", Utils.GetPrefabName(m.gameObject))
+                .S("id", m.GetComponent<ZNetView>().GetZDO().m_uid.ID.ToString()).V("pos", m.transform.position);
 
         /// <summary>Tiny JSON object builder (no dependency on a JSON library).</summary>
         private class Json

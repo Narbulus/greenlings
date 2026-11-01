@@ -5,7 +5,7 @@
 .EXAMPLE
   ./scripts/dev.ps1 run                 # build, restart game on dev profile, wait until in-world
   ./scripts/dev.ps1 cmd "sg_info" "!screenshot test"   # run console commands / directives in the live game
-  ./scripts/dev.ps1 test tests/teach-smelter.txt      # run scenario files; non-zero exit on failure
+  ./scripts/dev.ps1 test [files...]     # run scenario files (default: all tests/*.txt); summary + non-zero exit on failure
   ./scripts/dev.ps1 build               # build + deploy only
   ./scripts/dev.ps1 stop                # close the dev game
   ./scripts/dev.ps1 log [-Lines 80]     # tail the BepInEx log
@@ -107,17 +107,30 @@ function Send-Commands([string[]]$cmds) {
     if ($done -match 'FAILED') { throw 'command batch FAILED' }
 }
 
+# Inline "!include <file>" lines (relative to the including file), recursively.
+function Expand-Test([string]$Path) {
+    foreach ($line in Get-Content $Path) {
+        if ($line -match '^\s*!include\s+(.+)$') { Expand-Test (Join-Path (Split-Path $Path) $Matches[1].Trim()) }
+        else { $line }
+    }
+}
+
 switch ($Action) {
     'build'  { Invoke-Build }
     'launch' { Start-DevGame }
     'run'    { Assert-NoOtherGame; Stop-DevGame; Invoke-Build; Start-DevGame }
     'cmd'    { Send-Commands $Commands }
     'test'   {
-        foreach ($t in $Commands) {
-            Write-Host "== $t"
-            Send-Commands (Get-Content (Resolve-Path $t))
-            Write-Host "== PASS $t"
+        if (-not $Commands) { $Commands = Get-ChildItem "$Root\tests" -Filter '*.txt' | Where-Object { $_.Name -notlike '_*' } | ForEach-Object FullName }
+        $results = foreach ($t in $Commands) {
+            $name = Split-Path $t -Leaf
+            Write-Host "== $name"
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            try { Send-Commands (Expand-Test (Resolve-Path $t)); $ok = $true } catch { Write-Host "   $_"; $ok = $false }
+            [pscustomobject]@{ Test = $name; Result = $(if ($ok) { 'PASS' } else { 'FAIL' }); Seconds = [math]::Round($sw.Elapsed.TotalSeconds) }
         }
+        $results | Format-Table -AutoSize | Out-String | Write-Host
+        if ($results.Result -contains 'FAIL') { exit 1 }
     }
     'stop'   { Stop-DevGame }
     'log'    { Get-Content $Log -Tail $Lines }

@@ -1,0 +1,18 @@
+# Put raw meat from a chest onto a cooking station over a lit fire.
+!include _setup.txt
+gldev_place piece_chest_wood -3 4
+gldev_place fire_pit 3 6
+gldev_place piece_cookingstation 3 6
+gldev_fill piece_chest_wood RawMeat 10
+gldev_give Wood 3
+gldev_use fire_pit Wood
+!include _watching.txt
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take RawMeat 1
+gldev_close
+gldev_use piece_cookingstation RawMeat
+!waitfor GLEVT\] learned .*RawMeat: Container:piece_chest_wood#\d+ -> CookAdd:piece_cookingstation 3
+!waitfor GLEVT\] deposit .*item=RawMeat to=CookAdd 40
+!waitfor GLEVT\] wait .*reason=sink_full 40
+gl_dump

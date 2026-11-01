@@ -124,6 +124,7 @@ namespace Greenlings
             }
             var cur = Curiosity;
             Zdo.Set(ZCuriosity, Mathf.Clamp(cur + (target - cur) * 0.04f + Random.Range(-1f, 1f), 0f, 100f));
+            Brain.MaybeMisbehave();
         }
 
         // ---- RPC handlers (run on the owner) -----------------------------------------------

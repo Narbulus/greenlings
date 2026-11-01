@@ -28,8 +28,25 @@ namespace Greenlings.DevTools
                 .OrderBy(c => Vector3.Distance(c.transform.position, P.transform.position))
                 .FirstOrDefault();
 
+        /// <summary>AddItem(prefab, n) caps at one stack; add as many stacks as needed.</summary>
+        private static void AddStacks(Inventory inv, string item, int n)
+        {
+            var prefab = ObjectDB.instance.GetItemPrefab(item);
+            var max = Mathf.Max(1, prefab.GetComponent<ItemDrop>().m_itemData.m_shared.m_maxStackSize);
+            while (n > 0 && inv.AddItem(prefab, Mathf.Min(n, max))) n -= Mathf.Min(n, max);
+        }
+
+        private static GameObject NearestObject(string prefab) =>
+            LastPlaced.TryGetValue(prefab, out var last) && last ? last :
+            Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None)
+                .Where(v => v.IsValid() && Utils.GetPrefabName(v.gameObject) == prefab)
+                .OrderBy(v => Vector3.Distance(v.transform.position, P.transform.position))
+                .Select(v => v.gameObject).FirstOrDefault();
+
         /// <summary>Step up to a station like a player would (UI auto-closes beyond ~4m).</summary>
-        private static void StepTo(Component target)
+        private static void StepTo(Component target) => StepTo(target.transform);
+
+        private static void StepTo(Transform target)
         {
             var to = target.transform.position;
             var dir = P.transform.position - to;
@@ -69,7 +86,8 @@ namespace Greenlings.DevTools
                 P.SetGodMode(true);
                 P.SetGhostMode(true);
                 P.GetInventory().RemoveAll();
-                Say(a, "setup: god+ghost on, inventory emptied");
+                Player.m_enableAutoPickup = false; // tests pick things up explicitly
+                Say(a, "setup: god+ghost on, auto-pickup off, inventory emptied");
             });
 
             Cmd("gldev_place", "<prefab> <right> <forward> place a prefab relative to the player, snapped to ground", a =>
@@ -98,7 +116,7 @@ namespace Greenlings.DevTools
 
             Cmd("gldev_give", "<item> <n> add items to the player's inventory", a =>
             {
-                P.GetInventory().AddItem(ObjectDB.instance.GetItemPrefab(a[1]), a.TryParameterInt(2, 1));
+                AddStacks(P.GetInventory(), a[1], a.TryParameterInt(2, 1));
                 Say(a, $"gave {a[1]} x{a.TryParameterInt(2, 1)}");
             });
 
@@ -106,7 +124,7 @@ namespace Greenlings.DevTools
             {
                 var c = Nearest<Container>(a[1]);
                 if (!c) { Say(a, "no container " + a[1]); return; }
-                c.GetInventory().AddItem(ObjectDB.instance.GetItemPrefab(a[2]), a.TryParameterInt(3, 1));
+                AddStacks(c.GetInventory(), a[2], a.TryParameterInt(3, 1));
                 Say(a, $"filled {a[1]} with {a[2]} x{a.TryParameterInt(3, 1)}");
             });
 
@@ -193,6 +211,58 @@ namespace Greenlings.DevTools
                 pos.y = y;
                 SetPlayerPos(pos, P.transform.rotation);
                 Say(a, $"moved to {pos}");
+            });
+
+            Cmd("gldev_interact", "<prefab> press E on the nearest object of that prefab (pick, extract, tap, take food...)", a =>
+            {
+                var go = NearestObject(a[1]);
+                var it = go ? go.GetComponentInChildren<Interactable>() : null;
+                if (it == null) { Say(a, "nothing interactable: " + a[1]); return; }
+                StepTo(go.transform);
+                Say(a, "interact " + (it.Interact(P, false, false) ? "ok" : "refused"));
+            });
+
+            Cmd("gldev_use", "<prefab> <item> use an inventory item on the nearest object of that prefab (hotbar use)", a =>
+            {
+                var go = NearestObject(a[1]);
+                var it = go ? go.GetComponentInChildren<Interactable>() : null;
+                var item = P.GetInventory().GetAllItems().FirstOrDefault(i => i.m_dropPrefab && i.m_dropPrefab.name == a[2]);
+                if (it == null || item == null) { Say(a, $"need {a[1]} nearby and {a[2]} in inventory"); return; }
+                StepTo(go.transform);
+                Say(a, "use " + (it.UseItem(P, item) ? "ok" : "refused"));
+            });
+
+            Cmd("gldev_pickup", "<itemPrefab> pick up the nearest loose drop of that item", a =>
+            {
+                var drop = Nearest<ItemDrop>(a[1]);
+                if (!drop) { Say(a, "no drop " + a[1]); return; }
+                StepTo(drop.transform);
+                Say(a, "pickup " + (P.Pickup(drop.gameObject, false, false) ? "ok" : "refused"));
+            });
+
+            Cmd("gldev_ready", "<prefab> make the nearest producer ready now (beehive, sap collector, fermenter)", a =>
+            {
+                var go = NearestObject(a[1]);
+                var zdo = go ? go.GetComponent<ZNetView>()?.GetZDO() : null;
+                if (zdo == null) { Say(a, "no " + a[1]); return; }
+                if (go.GetComponent<Beehive>() is Beehive h) zdo.Set(ZDOVars.s_level, h.m_maxHoney);
+                else if (go.GetComponent<SapCollector>() is SapCollector sc) zdo.Set(ZDOVars.s_level, sc.m_maxLevel);
+                else if (go.GetComponent<Fermenter>() is Fermenter f)
+                {
+                    if (zdo.GetInt(ZDOVars.s_content) == 0) zdo.Set(ZDOVars.s_content, f.m_conversion[0].m_from.name.GetStableHashCode());
+                    zdo.Set(ZDOVars.s_startTime, ZNet.instance.GetTime().AddSeconds(-f.m_fermentationDuration - 10).Ticks);
+                }
+                else { Say(a, "not a producer: " + a[1]); return; }
+                Say(a, "ready " + a[1]);
+            });
+
+            Cmd("gldev_cfg", "<pluginGuid> <section> <key> <value> change a plugin config entry at runtime", a =>
+            {
+                if (!BepInEx.Bootstrap.Chainloader.PluginInfos.TryGetValue(a[1], out var info)) { Say(a, "no plugin " + a[1]); return; }
+                var entry = info.Instance.Config.Keys.FirstOrDefault(k => k.Section == a[2] && k.Key == a[3]);
+                if (entry == null) { Say(a, $"no config {a[2]}.{a[3]}"); return; }
+                info.Instance.Config[entry].SetSerializedValue(a[4]);
+                Say(a, $"{a[1]} {a[2]}.{a[3]} = {info.Instance.Config[entry].BoxedValue}");
             });
 
             Cmd("gldev_prefabs", "<substring> list prefab names containing the substring", a =>

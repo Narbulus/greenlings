@@ -43,7 +43,17 @@ namespace Greenlings
 
             if (watchers.Count == 0) { _lastCounts = null; _source = null; return; }
 
-            // Container moves have many UI code paths; diff the inventory while a chest is open.
+            ScanContainer();
+        }
+
+        /// <summary>
+        /// Container moves have many UI code paths, so diff the player's inventory while a chest is
+        /// open. Also runs just before the chest UI closes, so a take-and-close in one frame counts.
+        /// </summary>
+        public static void ScanContainer()
+        {
+            var p = Player.m_localPlayer;
+            if (!p || !Active) { _lastCounts = null; return; }
             var container = InventoryGui.instance ? InventoryGui.instance.m_currentContainer : null;
             var counts = Items.Counts(p.GetInventory());
             if (_lastCounts != null && container && container == _lastContainer)
@@ -57,6 +67,25 @@ namespace Greenlings
             }
             _lastCounts = counts;
             _lastContainer = container;
+        }
+
+
+        private static Pickable _picked;
+        private static float _pickedTime;
+
+        public static void NotePicked(Pickable p)
+        {
+            _picked = p;
+            _pickedTime = Time.time;
+        }
+
+        /// <summary>An item just picked from a bush counts as "harvest this kind of plant around here".</summary>
+        public static bool PickableSourceFor(string item, out Endpoint area)
+        {
+            area = null;
+            if (!_picked || Time.time - _pickedTime > 5f || _picked.m_itemPrefab.name != item) return false;
+            area = Endpoint.Pickables(_picked.transform.position, Utils.GetPrefabName(_picked.gameObject));
+            return true;
         }
 
         public static void Source(Endpoint where, string item)
@@ -87,6 +116,13 @@ namespace Greenlings
 
     // ---- hooks feeding Teaching ----------------------------------------------------------------
 
+    [HarmonyPatch(typeof(InventoryGui), nameof(InventoryGui.Hide))]
+    internal static class ContainerCloseHook
+    {
+        private static void Prefix() => Teaching.ScanContainer();
+    }
+
+    /// <summary>Items picked up: from a producer station if one is right there, else from the ground.</summary>
     [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.Pickup))]
     internal static class PickupHook
     {
@@ -99,29 +135,36 @@ namespace Greenlings
 
         private static void Postfix(bool __result, (string item, Vector3 pos)? __state)
         {
-            if (__result && __state.HasValue) Teaching.Source(Endpoint.Ground(__state.Value.pos), __state.Value.item);
+            if (!__result || !__state.HasValue || !Teaching.Active) return;
+            var (item, pos) = __state.Value;
+            if (Teaching.PickableSourceFor(item, out var area)) Teaching.Source(area, item);
+            else Teaching.Source(Sources.ProducerFor(pos, item) ?? Endpoint.Ground(pos), item);
         }
     }
 
-    [HarmonyPatch(typeof(Smelter), nameof(Smelter.OnAddOre))]
-    internal static class SmelterOreHook
+    /// <summary>Picking a bush/mushroom/crop: remember it so the drops it spawns count as "harvest here".</summary>
+    [HarmonyPatch(typeof(Pickable), nameof(Pickable.Interact))]
+    internal static class PickableHook
     {
-        private static void Prefix(Smelter __instance, Humanoid user, ItemDrop.ItemData item, out string __state) =>
-            __state = user == Player.m_localPlayer ? Items.PrefabOf(item ?? __instance.FindCookableItem(user.GetInventory())) : null;
-
-        private static void Postfix(Smelter __instance, bool __result, string __state)
+        private static void Postfix(Pickable __instance, Humanoid character, bool __result)
         {
-            if (__result && __state != null) Teaching.Sink(Endpoint.For(EndpointKind.SmelterOre, __instance), __state);
+            if (__result && character == Player.m_localPlayer && __instance.m_itemPrefab)
+                Teaching.NotePicked(__instance);
         }
     }
 
-    [HarmonyPatch(typeof(Smelter), nameof(Smelter.OnAddFuel))]
-    internal static class SmelterFuelHook
+    /// <summary>
+    /// Every way a player feeds a station ends in one of a few add-item RPCs, so watch those
+    /// instead of each station's UI code paths.
+    /// </summary>
+    [HarmonyPatch(typeof(ZNetView), nameof(ZNetView.InvokeRPC), typeof(string), typeof(object[]))]
+    internal static class StationRpcHook
     {
-        private static void Postfix(Smelter __instance, Humanoid user, bool __result)
+        private static void Prefix(ZNetView __instance, string method, object[] parameters)
         {
-            if (__result && user == Player.m_localPlayer && __instance.m_fuelItem)
-                Teaching.Sink(Endpoint.For(EndpointKind.SmelterFuel, __instance), __instance.m_fuelItem.name);
+            if (GreenlingBrain.Acting || !Teaching.Active || !__instance || !__instance.IsValid()) return;
+            if (method != "RPC_AddOre" && method != "RPC_AddFuel" && method != "RPC_AddItem") return;
+            if (Sinks.FromRpc(__instance, method, parameters, out var sink, out var item)) Teaching.Sink(sink, item);
         }
     }
 }

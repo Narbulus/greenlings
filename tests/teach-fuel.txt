@@ -1,0 +1,15 @@
+# Coal from a chest into a smelter's fuel slot.
+!include _setup.txt
+gldev_place piece_chest_wood -3 4
+gldev_place smelter 4 6
+gldev_fill piece_chest_wood Coal 30
+!include _watching.txt
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take Coal 1
+gldev_close
+gldev_addfuel smelter
+!waitfor GLEVT\] learned .*Coal: Container:piece_chest_wood#\d+ -> SmelterFuel:smelter 3
+!waitfor GLEVT\] deposit .*item=Coal 40
+!waitfor GLEVT\] wait .*reason=sink_full 90
+gl_dump

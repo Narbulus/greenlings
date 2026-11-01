@@ -1,0 +1,15 @@
+# Keep a fire fed with wood from a chest.
+!include _setup.txt
+gldev_place piece_chest_wood -3 4
+gldev_place fire_pit 3 6
+gldev_fill piece_chest_wood Wood 20
+!include _watching.txt
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take Wood 1
+gldev_close
+gldev_use fire_pit Wood
+!waitfor GLEVT\] learned .*Wood: Container:piece_chest_wood#\d+ -> FireFuel:fire_pit 3
+!waitfor GLEVT\] deposit .*item=Wood to=FireFuel 40
+!waitfor GLEVT\] wait .*reason=sink_full 60
+gl_dump

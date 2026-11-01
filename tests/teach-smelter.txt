@@ -1,8 +1,6 @@
 # Teach a greenling to carry copper ore from a chest into a smelter.
 # Run: ./scripts/dev.ps1 test tests/teach-smelter.txt
-gldev_setup
-gldev_clear
-!wait 1
+!include _setup.txt
 gldev_place piece_chest_wood -3 4
 gldev_place smelter 4 6
 gldev_fill piece_chest_wood CopperOre 12
@@ -29,6 +27,8 @@ gldev_take CopperOre 1
 !waitfor GLEVT\] demo_source item=CopperOre 3
 gldev_close
 gldev_addore smelter CopperOre
+!wait 0.3
+!screenshot understanding
 !waitfor GLEVT\] learned 3
 !waitfor GLEVT\] state .*to=Working 3
 

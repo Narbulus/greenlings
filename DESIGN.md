@@ -76,7 +76,7 @@ in danger: if there's a target, or it's hurt or fleeing, vanilla combat and flee
 Implemented so far: Pat (E), coin gifts, curiosity drift, Watching with attention, lesson recognition
 (container/ground source, container/smelter-ore/smelter-fuel sink), Working loop, wait/resume.
 Not yet: Idle mischief (vanilla tamed idle for now), carry visual, the VFX choice is a placeholder
-(`vfx_HealthUpgrade`), fuel task untested, ground source untested, multiplayer untested.
+(`fx_guardstone_permitted_add`, green sphere + chime), fuel task untested, ground source untested, multiplayer untested.
 
 v1 supported tasks: **fuel/ore into smelter-family stations** (`Smelter` component: smelter,
 charcoal kiln, furnace, blast furnace…) and **hauling container → container** (or ground →

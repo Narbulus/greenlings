@@ -11,7 +11,7 @@ namespace Greenlings
     {
         public const string Id = "greenlings";
         public const string Name = "Greenlings";
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
 
         internal static ManualLogSource Log;
 
@@ -36,6 +36,7 @@ namespace Greenlings
         internal static ConfigEntry<float> DepositInterval;
         internal static ConfigEntry<float> WaitRecheck;
         internal static ConfigEntry<float> StuckTimeout;
+        internal static ConfigEntry<float> MischiefChance;
 
         private void Awake()
         {
@@ -54,13 +55,15 @@ namespace Greenlings
             AttentionSpan = Config.Bind("Teaching", "AttentionSpan", 60f, "Seconds a greenling watches before losing interest (drains 3x when you are far away).");
             WatchFollowDistance = Config.Bind("Teaching", "WatchFollowDistance", 6f, "A watching greenling follows when you are further than this.");
             DemoWindow = Config.Bind("Teaching", "DemoWindow", 90f, "Max seconds between taking an item and putting it somewhere for it to count as a demonstration.");
-            UnderstandingVfx = Config.Bind("Teaching", "UnderstandingVfx", "vfx_HealthUpgrade", "Comma-separated effect prefabs for the burst of understanding.");
+            UnderstandingVfx = Config.Bind("Teaching", "UnderstandingVfx", "fx_guardstone_permitted_add", "Comma-separated effect prefabs for the burst of understanding.");
 
             CarryMax = Config.Bind("Labor", "CarryMax", 10, "Items carried per trip.");
             StationReach = Config.Bind("Labor", "StationReach", 2.2f, "How close a greenling must get to a station to use it.");
             DepositInterval = Config.Bind("Labor", "DepositInterval", 0.5f, "Seconds between putting single items into a station.");
             WaitRecheck = Config.Bind("Labor", "WaitRecheck", 5f, "Seconds a waiting greenling idles before checking its task again.");
             StuckTimeout = Config.Bind("Labor", "StuckTimeout", 30f, "Seconds without reaching a target before giving up on that trip.");
+
+            MischiefChance = Config.Bind("Mischief", "Chance", 0.015f, "Chance every 2s that an idle greenling starts a prank (x3 when sulky). 0 disables.");
 
             new Harmony(Id).PatchAll(typeof(Plugin).Assembly);
             Log.LogInfo($"{Name} {Version} loaded");

@@ -1,0 +1,8 @@
+# A watching greenling gives up when nothing is taught in time.
+!include _setup.txt
+gldev_cfg greenlings Teaching AttentionSpan 4
+!include _watching.txt
+!waitfor GLEVT\] lost_interest .*reason=attention_ran_out 10
+!waitfor GLEVT\] curiosity .*reason=lost_interest 2
+!waitfor GLEVT\] state .*to=Idle reason=attention_ran_out 2
+gldev_cfg greenlings Teaching AttentionSpan 60

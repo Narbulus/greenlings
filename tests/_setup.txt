@@ -1,0 +1,4 @@
+# Clean slate: god + ghost, no auto-pickup, nothing left from earlier tests.
+gldev_setup
+gldev_clear
+!wait 1

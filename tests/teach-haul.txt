@@ -1,8 +1,6 @@
 # Teach a greenling to haul wood from one chest to another.
 # Run: ./scripts/dev.ps1 test tests/teach-haul.txt
-gldev_setup
-gldev_clear
-!wait 1
+!include _setup.txt
 gldev_place piece_chest_wood -4 4
 gldev_place piece_chest 5 8
 gldev_fill piece_chest_wood Wood 25
@@ -28,6 +26,8 @@ gldev_close
 
 # 20 wood left in the source; CarryMax 10 means two trips, then it waits on an empty source
 !waitfor GLEVT\] take .*item=Wood n=10 30
+!wait 1.5
+!screenshot carrying
 !waitfor GLEVT\] deposit .*carrying=0 40
 !waitfor GLEVT\] take .*item=Wood n=10 30
 !waitfor GLEVT\] deposit .*carrying=0 40

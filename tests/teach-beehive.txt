@@ -1,0 +1,24 @@
+# Collect honey from a beehive into a chest, including harvesting it again later.
+!include _setup.txt
+gldev_place piece_chest_wood -3 4
+gldev_place piece_beehive 4 6
+gldev_ready piece_beehive
+!include _watching.txt
+gldev_interact piece_beehive
+!wait 1
+gldev_pickup Honey
+!waitfor GLEVT\] demo_source item=Honey at=Extract:piece_beehive 3
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_put Honey 1
+!waitfor GLEVT\] learned .*Honey: Extract:piece_beehive#\d+ -> Container:piece_chest_wood 3
+gldev_close
+# the rest of the first batch is lying by the hive
+!waitfor GLEVT\] take .*item=Honey 30
+!waitfor GLEVT\] deposit .*carrying=0 40
+# refill: the greenling has to extract it itself
+gldev_ready piece_beehive
+!waitfor GLEVT\] harvest .*item=Honey 40
+!waitfor GLEVT\] take .*item=Honey 20
+!waitfor GLEVT\] deposit .*carrying=0 40
+gl_dump

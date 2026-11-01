@@ -36,6 +36,7 @@ namespace Greenlings
             ai.m_consumeItems = new List<ItemDrop> { tameItem };
 
             if (!greyling.GetComponent<Greenling>()) greyling.AddComponent<Greenling>();
+            if (!greyling.GetComponent<CarryVisual>()) greyling.AddComponent<CarryVisual>();
             Plugin.Log.LogInfo($"Greyling is now tameable with {tameItem.name} ({tame.m_tamingTime}s, fed {tame.m_fedDuration}s per item)");
         }
     }

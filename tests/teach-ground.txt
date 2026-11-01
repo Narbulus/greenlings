@@ -1,0 +1,17 @@
+# Tidy up: loose wood on the ground goes into a chest.
+!include _setup.txt
+gldev_place piece_chest_wood -3 2
+spawn Wood 6
+!wait 1
+!include _watching.txt
+gldev_pickup Wood
+!waitfor GLEVT\] demo_source item=Wood at=Ground 3
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_put Wood 1
+!waitfor GLEVT\] learned .*Wood: Ground@.* -> Container:piece_chest_wood 3
+gldev_close
+!waitfor GLEVT\] take .*item=Wood 30
+!waitfor GLEVT\] deposit .*item=Wood 40
+!waitfor GLEVT\] wait .*reason=source_empty 60
+gl_dump

@@ -1,0 +1,5 @@
+# A fresh greenling right in front of the player.
+spawn Greyling 1
+!wait 1
+gldev_tame
+!wait 1.5

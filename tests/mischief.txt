@@ -1,0 +1,13 @@
+# Idle greenlings misbehave: steal from a chest and drop it elsewhere, run around.
+!include _setup.txt
+gldev_place piece_chest_wood -3 4
+gldev_fill piece_chest_wood Wood 10
+!include _tamed.txt
+gl_prank misplace
+!waitfor GLEVT\] mischief .*kind=misplace 3
+!waitfor GLEVT\] mischief_steal 30
+!waitfor GLEVT\] mischief_drop 45
+!waitfor GLEVT\] mischief_done .*kind=misplace 5
+gl_prank zoomies
+!waitfor GLEVT\] mischief_done .*kind=zoomies 45
+gl_dump

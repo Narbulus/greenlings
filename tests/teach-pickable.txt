@@ -1,0 +1,21 @@
+# Harvest raspberry bushes around an area into a chest.
+!include _setup.txt
+gldev_place piece_chest_wood -3 3
+gldev_place RaspberryBush 3 5
+gldev_place RaspberryBush 5 8
+gldev_place RaspberryBush 2 9
+!include _watching.txt
+gldev_interact RaspberryBush
+!wait 1
+gldev_pickup Raspberry
+!waitfor GLEVT\] demo_source item=Raspberry at=PickableArea:RaspberryBush 3
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_put Raspberry 1
+!waitfor GLEVT\] learned .*Raspberry: PickableArea:RaspberryBush@.* -> Container 3
+gldev_close
+!waitfor GLEVT\] harvest .*item=Raspberry 40
+!waitfor GLEVT\] harvest .*item=Raspberry 40
+!waitfor GLEVT\] deposit .*item=Raspberry 60
+!waitfor GLEVT\] wait .*reason=source_empty 60
+gl_dump
