@@ -24,7 +24,10 @@ namespace Greenlings
 
             if (g.State == GreenlingState.Watching && g.Teacher == player.GetZDOID())
             {
-                player.Message(MessageHud.MessageType.Center, $"{name} is already watching you closely");
+                // a second pat while it watches = "never mind": forget the job and go play
+                player.Message(MessageHud.MessageType.Center, $"{name} shrugs and wanders off");
+                Plugin.Log.LogInfo($"[GLEVT] pat_dismiss gl={g.Label}");
+                g.NView.InvokeRPC("GL_Dismiss");
                 return;
             }
             if (g.Curiosity < Plugin.LearnThreshold.Value)
@@ -80,7 +83,8 @@ namespace Greenlings
             };
             if (g.State == GreenlingState.Working && g.CarryCount > 0) status += $", carrying {g.CarryCount} {Items.DisplayName(g.CarryItem)}";
             var text = $"{__instance.GetHoverName()} ( {status} )" +
-                       "\n[<color=yellow><b>$KEY_Use</b></color>] Pat" +
+                       (g.State == GreenlingState.Watching ? "\n[<color=yellow><b>$KEY_Use</b></color>] Never mind (forget its job)"
+                                                           : "\n[<color=yellow><b>$KEY_Use</b></color>] Pat") +
                        "\n[<color=yellow><b>$KEY_AltPlace + $KEY_Use</b></color>] $hud_rename";
             __result = Localization.instance.Localize(text);
         }

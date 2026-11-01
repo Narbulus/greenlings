@@ -73,10 +73,12 @@ in danger: if there's a target, or it's hurt or fleeing, vanilla combat and flee
 - **Carry visual** (stretch goal): attach the item's drop model to the greyling's hand bone.
   The greyling prefab has no `VisEquipment`, so this needs a manual attach. It looks doable.
 
-Implemented so far: Pat (E), coin gifts, curiosity drift, Watching with attention, lesson recognition
-(container/ground source, container/smelter-ore/smelter-fuel sink), Working loop, wait/resume.
-Not yet: Idle mischief (vanilla tamed idle for now), carry visual, the VFX choice is a placeholder
-(`fx_guardstone_permitted_add`, green sphere + chime), fuel task untested, ground source untested, multiplayer untested.
+Implemented and covered by scenario tests: coin taming, Pat (E) / second pat = forget job,
+coin gifts, curiosity drift, Watching with attention, lesson recognition, Working loop with
+wait/resume, re-teaching, idle mischief (zoomies / misplace items from chests / scatter drops),
+carry visual (item model on the right hand), the understanding burst (`fx_guardstone_permitted_add`),
+survival across world reloads (stations re-found by prefab + position since ZDOIDs change on load).
+Not yet: multiplayer testing, server-synced config, crop replanting.
 
 v1 supported tasks: **fuel/ore into smelter-family stations** (`Smelter` component: smelter,
 charcoal kiln, furnace, blast furnace…) and **hauling container → container** (or ground →
@@ -97,12 +99,13 @@ breeding (`Procreation`), tameable brutes and shamans, more task types.
 
 | Task | Source -> Sink | Component | Status |
 |---|---|---|---|
-| Feed smelter/furnace/kiln/windmill/spinning wheel/refinery | chest -> station | `Smelter` | ore done, fuel untested |
-| Collect smelter output | ground -> chest | `ItemDrop` | ground source written, untested |
-| Haul / restock | chest -> chest | `Container` | done |
-| Tidy up drops | ground -> chest | `ItemDrop` | ground source written, untested |
-| Fires, hearths, braziers, torches | chest -> fire | `Fireplace` | todo |
-| Cooking | chest -> cooking station -> chest | `CookingStation` | todo |
-| Honey / sap | hive/extractor -> chest | `Beehive`, `SapCollector` | todo |
-| Fermenter | chest <-> fermenter | `Fermenter` | todo |
-| Harvest + replant | crop -> chest, seed -> soil | `Pickable`, `Plant` | todo |
+| Feed smelter/furnace/kiln/windmill/spinning wheel/refinery | chest -> station | `Smelter` | done (teach-smelter, teach-fuel) |
+| Collect smelter output / tidy drops | ground -> chest | `ItemDrop` | done (teach-ground) |
+| Haul / restock | chest -> chest | `Container` | done (teach-haul) |
+| Fires, hearths, braziers, torches | chest -> fire | `Fireplace` | done (teach-fire) |
+| Cooking | chest -> cooking station -> chest | `CookingStation` | done (teach-cook, teach-cook-collect) |
+| Honey | hive -> chest | `Beehive` | done (teach-beehive) |
+| Sap | extractor -> chest | `SapCollector` | written, untested (needs an Ashlands tree) |
+| Fermenter | chest -> fermenter | `Fermenter` | load done (teach-fermenter); tapping written, untested |
+| Harvest pickables | bushes/mushrooms -> chest | `Pickable` | done (teach-pickable) |
+| Replant crops | seed -> soil | `Plant` | todo |

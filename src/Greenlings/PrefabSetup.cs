@@ -34,6 +34,7 @@ namespace Greenlings
 
             var ai = greyling.GetComponent<MonsterAI>();
             ai.m_consumeItems = new List<ItemDrop> { tameItem };
+            ai.m_consumeSearchRange = Plugin.CoinSearchRange.Value; // greedy for shiny things (boars: 5m)
 
             if (!greyling.GetComponent<Greenling>()) greyling.AddComponent<Greenling>();
             if (!greyling.GetComponent<CarryVisual>()) greyling.AddComponent<CarryVisual>();

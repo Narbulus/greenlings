@@ -55,7 +55,9 @@ namespace Greenlings
         }
 
         public string Label => $"{GetName()}#{(Zdo != null ? Zdo.m_uid.ID : 0)}";
-        public string GetName() => Tameable && Tameable.GetText().Length > 0 ? Tameable.GetText() : DisplayName;
+        public string GetName() =>
+            !IsGreenling ? Localization.instance.Localize(_wildName ?? Character.m_name)
+            : Tameable && Tameable.GetText().Length > 0 ? Tameable.GetText() : DisplayName;
 
         private void Awake()
         {
@@ -74,8 +76,10 @@ namespace Greenlings
                 NView.Register("GL_Gift", RPC_Gift);
                 NView.Register<ZDOID>("GL_StartWatch", RPC_StartWatch);
                 NView.Register<string>("GL_Learn", RPC_Learn);
+                NView.Register("GL_Dismiss", RPC_Dismiss);
                 NView.Register("GL_Burst", RPC_Burst);
             }
+            AI.m_onConsumedItem += item => Event("ate", $"item={Utils.GetPrefabName(item.gameObject)} tameness={Tameable.GetTameness()}%");
             InvokeRepeating(nameof(Refresh), 0f, 1f);
             InvokeRepeating(nameof(DriftMood), 2f, 2f);
         }
@@ -159,6 +163,14 @@ namespace Greenlings
             NView.InvokeRPC(ZRoutedRpc.Everybody, "GL_Burst");
         }
 
+        private void RPC_Dismiss(long sender)
+        {
+            if (!IsOwner || State != GreenlingState.Watching) return;
+            if (Task != null) Event("forgot", $"task=\"{Task}\"");
+            Zdo.Set(ZTask, "");
+            SetState(GreenlingState.Idle, "dismissed");
+        }
+
         /// <summary>Burst of understanding, played on every client.</summary>
         private void RPC_Burst(long sender)
         {
@@ -182,6 +194,15 @@ namespace Greenlings
                 if (tamed) block.SetColor(ColorId, Plugin.TamedTint.Value);
                 else block.Clear();
                 r.SetPropertyBlock(block);
+            }
+        }
+
+        [HarmonyLib.HarmonyPatch(typeof(Tameable), nameof(Tameable.Tame))]
+        private static class TamedEvent
+        {
+            private static void Postfix(Tameable __instance)
+            {
+                if (__instance.GetComponent<Greenling>() is Greenling g && g.IsGreenling) g.Event("tamed");
             }
         }
 

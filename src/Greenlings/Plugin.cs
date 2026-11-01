@@ -11,13 +11,14 @@ namespace Greenlings
     {
         public const string Id = "greenlings";
         public const string Name = "Greenlings";
-        public const string Version = "0.3.0";
+        public const string Version = "0.4.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<string> TameItem;
         internal static ConfigEntry<float> TamingTime;
         internal static ConfigEntry<float> FedDuration;
+        internal static ConfigEntry<float> CoinSearchRange;
         internal static ConfigEntry<Color> TamedTint;
 
         internal static ConfigEntry<float> LearnThreshold;
@@ -44,6 +45,7 @@ namespace Greenlings
             TameItem = Config.Bind("Taming", "Item", "Coins", "Item prefab greylings eat while being tamed, and that raises a greenling's curiosity when given.");
             TamingTime = Config.Bind("Taming", "TamingTime", 600f, "Seconds of being fed and calm needed to tame a greyling (boars: 1800).");
             FedDuration = Config.Bind("Taming", "FedDuration", 60f, "Seconds one eaten item keeps a greyling fed (taming only progresses while fed).");
+            CoinSearchRange = Config.Bind("Taming", "SearchRange", 10f, "How far greylings notice the taming item on the ground (boars notice food at 5m).");
             TamedTint = Config.Bind("Visuals", "TamedTint", new Color(0.55f, 1f, 0.45f), "Color multiplied onto a tamed greyling's skin.");
 
             LearnThreshold = Config.Bind("Teaching", "LearnThreshold", 50f, "Curiosity (0-100) needed for a pat to start a lesson.");

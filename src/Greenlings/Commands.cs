@@ -65,7 +65,9 @@ namespace Greenlings
                 if (ai)
                 {
                     j.S("target", ai.GetTargetCreature() ? Utils.GetPrefabName(ai.GetTargetCreature().gameObject) : "")
-                     .B("alerted", ai.IsAlerted());
+                     .B("alerted", ai.IsAlerted())
+                     .B("despawnInDay", ai.DespawnInDay()).B("event", ai.IsEventCreature()).B("sleeping", ai.IsSleeping())
+                     .S("eating", ai.m_consumeTarget ? $"{Utils.GetPrefabName(ai.m_consumeTarget.gameObject)}@{Vector3.Distance(ai.m_consumeTarget.transform.position, c.transform.position):0.0}m" : "");
                 }
                 yield return j.ToString();
             }
@@ -97,7 +99,10 @@ namespace Greenlings
             var drops = Physics.OverlapSphere(at, radius, LayerMask.GetMask("item"))
                 .Select(c => c.attachedRigidbody ? c.attachedRigidbody.GetComponent<ItemDrop>() : null).Where(d => d)
                 .GroupBy(d => Utils.GetPrefabName(d.gameObject)).Select(g => g.Key + "x" + g.Sum(d => d.m_itemData.m_stack));
-            yield return new Json().S("type", "drops").S("items", string.Join(",", drops)).ToString();
+            var where = Physics.OverlapSphere(at, radius, LayerMask.GetMask("item"))
+                .Select(c => c.attachedRigidbody ? c.attachedRigidbody.GetComponent<ItemDrop>() : null).Where(d => d).Take(12)
+                .Select(d => string.Format(CultureInfo.InvariantCulture, "{0}@{1:0.0},{2:0.0},{3:0.0}", Utils.GetPrefabName(d.gameObject), d.transform.position.x, d.transform.position.y, d.transform.position.z));
+            yield return new Json().S("type", "drops").S("items", string.Join(",", drops)).S("where", string.Join(" ", where)).ToString();
 
             foreach (var s in Object.FindObjectsByType<Smelter>(FindObjectsSortMode.None)
                          .Where(x => Vector3.Distance(x.transform.position, at) < radius && x.m_nview && x.m_nview.IsValid()))

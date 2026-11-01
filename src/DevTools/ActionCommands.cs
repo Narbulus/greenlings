@@ -17,6 +17,8 @@ namespace Greenlings.DevTools
         private static readonly Dictionary<string, GameObject> LastPlaced = new Dictionary<string, GameObject>();
 
         private static Player P => Player.m_localPlayer;
+        private static string PlacedLog => System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "devtools", "placed.txt");
+        private static float F(string s) => float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
 
         private static void Say(Terminal.ConsoleEventArgs a, string s) => a.Context.AddString(s);
 
@@ -101,6 +103,7 @@ namespace Greenlings.DevTools
                 var go = Object.Instantiate(prefab, pos, Quaternion.LookRotation(-t.forward));
                 Placed.Add(go);
                 LastPlaced[a[1]] = go;
+                System.IO.File.AppendAllText(PlacedLog, string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0} {1} {2} {3}\n", a[1], pos.x, pos.y, pos.z));
                 Say(a, $"placed {a[1]} id={go.GetComponent<ZNetView>()?.GetZDO()?.m_uid.ID} at {pos}");
             });
 
@@ -108,10 +111,29 @@ namespace Greenlings.DevTools
             {
                 foreach (var go in Placed.Where(g => g)) ZNetScene.instance.Destroy(go);
                 Placed.Clear();
+                // also objects placed in earlier game sessions (Placed only knows this one)
+                var removed = 0;
+                if (System.IO.File.Exists(PlacedLog))
+                {
+                    foreach (var line in System.IO.File.ReadAllLines(PlacedLog))
+                    {
+                        var p = line.Split(' ');
+                        if (p.Length < 4) continue;
+                        var at = new Vector3(F(p[1]), F(p[2]), F(p[3]));
+                        foreach (var v in Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None))
+                            if (v && v.IsValid() && Utils.GetPrefabName(v.gameObject) == p[0] && Vector3.Distance(v.transform.position, at) < 1f)
+                            {
+                                if (!v.IsOwner()) v.ClaimOwnership();
+                                ZNetScene.instance.Destroy(v.gameObject);
+                                removed++;
+                            }
+                    }
+                    System.IO.File.Delete(PlacedLog);
+                }
                 LastPlaced.Clear();
                 Console.instance.TryRunCommand("killall", true, true);
                 P.StartCoroutine(RemoveDropsSoon()); // corpses drop loot a moment after dying
-                Say(a, "cleared");
+                Say(a, $"cleared ({removed} left over from earlier sessions)");
             });
 
             Cmd("gldev_give", "<item> <n> add items to the player's inventory", a =>
@@ -193,6 +215,20 @@ namespace Greenlings.DevTools
                 var item = P.GetInventory().GetAllItems().FirstOrDefault(i => i.m_dropPrefab && i.m_dropPrefab.name == a[1]);
                 if (!t || item == null) { Say(a, $"need a greyling and {a[1]} in inventory"); return; }
                 Say(a, "useitem " + (t.UseItem(P, item) ? "ok" : "refused"));
+            });
+
+            Cmd("gldev_remove", "<prefab> [radius=40] destroy every instance of a prefab near the player", a =>
+            {
+                var radius = a.TryParameterFloat(2, 40f);
+                var hits = Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None)
+                    .Where(v => v && v.IsValid() && Utils.GetPrefabName(v.gameObject) == a[1]
+                                && Vector3.Distance(v.transform.position, P.transform.position) < radius).ToList();
+                foreach (var v in hits)
+                {
+                    if (!v.IsOwner()) v.ClaimOwnership();
+                    ZNetScene.instance.Destroy(v.gameObject);
+                }
+                Say(a, $"removed {hits.Count} {a[1]}");
             });
 
             Cmd("gldev_rename", "<name> rename the nearest tamed greyling like Shift+E would", a =>

@@ -1,0 +1,8 @@
+# Wild greylings attack greenlings on sight (and the greenling fights back).
+!include _setup.txt
+!include _tamed.txt
+gldev_move 0 -4
+spawn Greyling 1
+!wait 5
+gl_dump 20
+!waitfor GLDUMP\] \{"type":"greyling".*"target":"Greyling" 2
