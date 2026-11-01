@@ -9,6 +9,7 @@
   ./scripts/dev.ps1 build               # build + deploy only
   ./scripts/dev.ps1 stop                # close the dev game
   ./scripts/dev.ps1 log [-Lines 80]     # tail the BepInEx log
+  ./scripts/dev.ps1 test -Profile GreenlingsCompat   # any action against another r2modman profile (never Default)
 
 Directives understood by DevTools (prefix "!"): !wait <sec>, !waitfor <regex> [timeout], !screenshot <name>, !pos, !quit.
 A failed !waitfor skips the rest of the batch and makes the command exit non-zero.
@@ -18,24 +19,29 @@ param(
     [Parameter(Position = 0)][ValidateSet('run', 'build', 'launch', 'cmd', 'test', 'stop', 'log')][string]$Action = 'run',
     [Parameter(Position = 1, ValueFromRemainingArguments)][string[]]$Commands,
     [int]$Lines = 60,
-    [int]$TimeoutSec = 180
+    [int]$TimeoutSec = 180,
+    # r2modman profile to build into and launch. Default: the dev profile.
+    [Alias('Profile')][string]$R2Profile = 'GreenlingsDev'
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $GameDir = 'C:\Program Files (x86)\Steam\steamapps\common\Valheim'
-$DevProfile = Join-Path $env:APPDATA 'r2modmanPlus-local\Valheim\profiles\GreenlingsDev'
+if ($R2Profile -eq 'Default') { throw 'Refusing to touch the Default profile (the real one). Copy it to a new profile instead.' }
+$DevProfile = Join-Path $env:APPDATA "r2modmanPlus-local\Valheim\profiles\$R2Profile"
+if (-not (Test-Path $DevProfile)) { throw "no r2modman profile at $DevProfile" }
+$ProfileMatch = "*\profiles\$R2Profile\*"
 $Log = Join-Path $DevProfile 'BepInEx\LogOutput.log'
 $DevDir = Join-Path $DevProfile 'BepInEx\devtools'
 
 function Get-DevGame {
     Get-CimInstance Win32_Process -Filter "Name='valheim.exe'" |
-        Where-Object { $_.CommandLine -like '*GreenlingsDev*' }
+        Where-Object { $_.CommandLine -like $ProfileMatch }
 }
 
 function Assert-NoOtherGame {
     $other = Get-CimInstance Win32_Process -Filter "Name='valheim.exe'" |
-        Where-Object { $_.CommandLine -notlike '*GreenlingsDev*' }
-    if ($other) { throw "Valheim is already running outside the dev profile (pid $($other.ProcessId)). Close it first." }
+        Where-Object { $_.CommandLine -notlike $ProfileMatch }
+    if ($other) { throw "Valheim is already running outside profile $R2Profile (pid $($other.ProcessId)). Close it first." }
 }
 
 function Stop-DevGame {
@@ -49,7 +55,7 @@ function Stop-DevGame {
 function Invoke-Build {
     $sw = [Diagnostics.Stopwatch]::StartNew()
     # The game locks plugin DLLs, so deploy only works with the dev game closed.
-    dotnet build "$Root\Greenlings.sln" -v q -nologo -clp:NoSummary
+    dotnet build "$Root\Greenlings.sln" -v q -nologo -clp:NoSummary "-p:R2ProfileDir=$DevProfile"
     if ($LASTEXITCODE -ne 0) { throw 'build failed' }
     Write-Host ("build+deploy {0:n1}s" -f $sw.Elapsed.TotalSeconds)
 }

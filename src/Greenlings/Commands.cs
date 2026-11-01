@@ -16,6 +16,8 @@ namespace Greenlings
     {
         private static void Postfix()
         {
+            Uninstall.Register();
+
             new Terminal.ConsoleCommand("gl_dump", "[radius=40] Greenlings: dump greenlings, greylings and stations near you as JSON lines", args =>
             {
                 var player = Player.m_localPlayer;

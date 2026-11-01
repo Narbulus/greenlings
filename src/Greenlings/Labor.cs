@@ -206,15 +206,24 @@ namespace Greenlings
                     return null;
                 }
                 case EndpointKind.PickableArea:
-                    return Object.FindObjectsByType<Pickable>(FindObjectsSortMode.None)
-                        .Where(p => Utils.GetPrefabName(p.gameObject) == src.Prefab && !p.m_picked && p.m_nview && p.m_nview.IsValid()
-                                    && Vector3.Distance(p.transform.position, src.Pos) < src.CollectRadius)
+                    return Near<Pickable>(src.Pos, src.CollectRadius)
+                        .Where(p => Utils.GetPrefabName(p.gameObject) == src.Prefab && !p.m_picked && p.m_nview && p.m_nview.IsValid())
                         .OrderBy(p => Vector3.Distance(p.transform.position, from))
                         .Select(p => p.gameObject).FirstOrDefault();
                 default:
                     return null;
             }
         }
+
+        /// <summary>
+        /// Components of type T with a collider within radius (each once). Called every frame while a
+        /// greenling walks to a job, so it asks physics about one area instead of scanning every loaded object.
+        /// </summary>
+        public static IEnumerable<T> Near<T>(Vector3 pos, float radius) where T : Component =>
+            Physics.OverlapSphere(pos, radius)
+                .Select(c => c.GetComponentInParent<T>()).Where(x => x)
+                .Distinct()
+                .Where(x => Vector3.Distance(x.transform.position, pos) < radius);
 
         /// <summary>Make a producer spit out its items (they land as drops, like for players).</summary>
         public static void Harvest(GameObject producer, Vector3 greenlingPos)
@@ -230,9 +239,7 @@ namespace Greenlings
         public static int TakeFromContainer(Endpoint src, string item, int max)
         {
             var c = src.Get<Container>();
-            if (!c || c.IsInUse()) return 0;
-            var nview = c.GetComponent<ZNetView>();
-            if (!nview.IsOwner()) nview.ClaimOwnership();
+            if (!c || c.IsInUse() || !ChestOwnership.TryOwn(c)) return 0;
             var inv = c.GetInventory();
             var n = Mathf.Min(max, inv.CountItems(Items.SharedName(item)));
             if (n > 0) inv.RemoveItem(Items.SharedName(item), n); // Container saves itself via m_onChanged
@@ -243,7 +250,10 @@ namespace Greenlings
         public static int PickUp(ItemDrop drop, int max)
         {
             var nview = drop.GetComponent<ZNetView>();
-            if (!nview.IsOwner()) nview.ClaimOwnership();
+            if (!nview || !nview.IsValid()) return 0;
+            // Same handoff players use: ask the owner and try again once it is ours, so two
+            // clients never both take the same drop.
+            if (!nview.IsOwner()) { drop.RequestOwn(); return 0; }
             var n = Mathf.Min(max, drop.m_itemData.m_stack);
             if (n >= drop.m_itemData.m_stack) ZNetScene.instance.Destroy(drop.gameObject);
             else { drop.m_itemData.m_stack -= n; drop.Save(); }
@@ -304,7 +314,7 @@ namespace Greenlings
                 {
                     var c = go.GetComponent<Container>();
                     if (c.IsInUse()) { blocked = "sink_in_use"; return false; }
-                    if (!nview.IsOwner()) nview.ClaimOwnership();
+                    if (!ChestOwnership.TryOwn(c)) { blocked = "sink_owner_busy"; return false; }
                     var prefab = ObjectDB.instance.GetItemPrefab(item);
                     return c.GetInventory().CanAddItem(prefab, 1) && c.GetInventory().AddItem(prefab, 1);
                 }
@@ -402,5 +412,52 @@ namespace Greenlings
             inv.GetAllItems().Where(i => i.m_dropPrefab)
                .GroupBy(i => i.m_dropPrefab.name)
                .ToDictionary(g => g.Key, g => g.Sum(i => i.m_stack));
+    }
+}
+
+namespace Greenlings
+{
+    /// <summary>
+    /// Greenlings edit chest inventories directly, which only the chest's owner may do. Taking
+    /// ownership by force could race a player opening the chest on another client (lost or
+    /// duplicated items), so do what vanilla does when a player opens one: ask the owner, who
+    /// hands it over only while nobody has it open.
+    /// </summary>
+    [HarmonyLib.HarmonyPatch(typeof(Container), nameof(Container.Awake))]
+    internal static class ChestOwnership
+    {
+        private const string Rpc = "GL_RequestChest";
+        private static readonly System.Collections.Generic.Dictionary<ZDOID, float> LastAsked = new System.Collections.Generic.Dictionary<ZDOID, float>();
+
+        private static void Postfix(Container __instance)
+        {
+            var nview = __instance.m_nview;
+            if (nview && nview.IsValid()) nview.Register(Rpc, sender => Handover(__instance, sender));
+        }
+
+        /// <summary>True if this client owns the chest now; otherwise asks for it (retry later).</summary>
+        public static bool TryOwn(Container c)
+        {
+            var nview = c ? c.m_nview : null;
+            if (!nview || !nview.IsValid()) return false;
+            if (nview.IsOwner()) return true;
+            var zdo = nview.GetZDO();
+            if (!zdo.HasOwner()) { nview.ClaimOwnership(); return true; }
+            if (!LastAsked.TryGetValue(zdo.m_uid, out var t) || UnityEngine.Time.time - t > 1f)
+            {
+                LastAsked[zdo.m_uid] = UnityEngine.Time.time;
+                nview.InvokeRPC(Rpc);
+            }
+            return false;
+        }
+
+        /// <summary>Owner side: hand the chest over unless someone is using it.</summary>
+        private static void Handover(Container c, long sender)
+        {
+            var nview = c.m_nview;
+            if (!nview || !nview.IsValid() || !nview.IsOwner() || c.IsInUse() || (c.m_wagon && c.m_wagon.InUse())) return;
+            ZDOMan.instance.ForceSendZDO(sender, nview.GetZDO().m_uid);
+            nview.GetZDO().SetOwner(sender);
+        }
     }
 }

@@ -110,6 +110,10 @@ namespace Greenlings
             Log.LogInfo($"{Name} {Version} loaded");
         }
 
-        private void Update() => Teaching.Update();
+        private void Update()
+        {
+            try { Teaching.Update(); }
+            catch (System.Exception e) { Interaction.Fail("Teaching.Update", e); }
+        }
     }
 }

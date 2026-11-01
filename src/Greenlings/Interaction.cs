@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using UnityEngine;
@@ -10,10 +12,22 @@ namespace Greenlings
     /// </summary>
     internal static class Interaction
     {
+        // EpicLoot's Spirit Animal effect binds tamed creatures and summons them back as spirits it
+        // controls (pats and items blocked for everyone but the binder). Leave those to it.
+        private static readonly int EpicLootSpirit = "el-spirit".GetStableHashCode();
+
         public static bool IsGreenling(Tameable t, out Greenling g)
         {
-            g = t.GetComponent<Greenling>();
-            return g && g.IsGreenling;
+            g = t ? t.GetComponent<Greenling>() : null;
+            return g && g.IsGreenling && g.Zdo != null && g.Zdo.GetLong(EpicLootSpirit) == 0L;
+        }
+
+        private static readonly HashSet<string> Reported = new HashSet<string>();
+
+        /// <summary>Log a patch failure once per site instead of letting it escape into the game's loop.</summary>
+        internal static void Fail(string where, Exception e)
+        {
+            if (Reported.Add(where)) Plugin.Log.LogError($"{where} failed (further errors here are not logged): {e}");
         }
 
         public static bool IsFood(string prefab) =>
@@ -62,8 +76,9 @@ namespace Greenlings
     {
         private static bool Prefix(Tameable __instance, Humanoid user, bool hold, bool alt, ref bool __result)
         {
-            if (!Interaction.IsGreenling(__instance, out var g) || hold || alt) return true; // alt = vanilla rename
-            Interaction.Pat(g, user);
+            if (hold || alt || !(user is Player) || !Interaction.IsGreenling(__instance, out var g)) return true; // alt = vanilla rename
+            try { Interaction.Pat(g, user); }
+            catch (Exception e) { Interaction.Fail("Pat", e); }
             __result = true;
             return false;
         }
@@ -74,7 +89,13 @@ namespace Greenlings
     {
         private static bool Prefix(Tameable __instance, Humanoid user, ItemDrop.ItemData item, ref bool __result)
         {
-            if (!Interaction.IsGreenling(__instance, out var g)) return true;
+            if (!(user is Player player) || !Interaction.IsGreenling(__instance, out var g)) return true;
+            try { return Give(g, player, item, ref __result); }
+            catch (Exception e) { Interaction.Fail("UseItem", e); return true; }
+        }
+
+        private static bool Give(Greenling g, Player user, ItemDrop.ItemData item, ref bool __result)
+        {
             var prefab = Items.PrefabOf(item);
             if (prefab != Plugin.TameItem.Value)
             {
@@ -89,7 +110,7 @@ namespace Greenlings
                 user.Message(MessageHud.MessageType.Center, $"{g.GetName()} munches the {Items.DisplayName(prefab)} happily");
                 g.Tameable.m_sootheEffect.Create(g.Character.GetCenterPoint(), Quaternion.identity);
                 Plugin.Log.LogInfo($"[GLEVT] feed gl={g.Label} item={prefab}");
-                g.NView.InvokeRPC("GL_Feed", prefab, ((Player)user).GetZDOID());
+                g.NView.InvokeRPC("GL_Feed", prefab, user.GetZDOID());
                 __result = true;
                 return false;
             }
@@ -105,9 +126,17 @@ namespace Greenlings
     [HarmonyPatch(typeof(Tameable), nameof(Tameable.GetHoverText))]
     internal static class HoverPatch
     {
+        // We replace the vanilla text, so go first: other mods' postfixes then append to ours instead of being wiped.
+        [HarmonyPriority(Priority.First)]
         private static void Postfix(Tameable __instance, ref string __result)
         {
             if (!Interaction.IsGreenling(__instance, out var g)) return;
+            try { __result = Text(__instance, g); }
+            catch (Exception e) { Interaction.Fail("GetHoverText", e); }
+        }
+
+        private static string Text(Tameable __instance, Greenling g)
+        {
             var status = g.State switch
             {
                 GreenlingState.Watching => "watching you",
@@ -120,7 +149,7 @@ namespace Greenlings
                        (g.State == GreenlingState.Watching ? "\n[<color=yellow><b>$KEY_Use</b></color>] Never mind (forget its job)"
                                                            : "\n[<color=yellow><b>$KEY_Use</b></color>] Pat") +
                        "\n[<color=yellow><b>$KEY_AltPlace + $KEY_Use</b></color>] $hud_rename";
-            __result = Localization.instance.Localize(text);
+            return Localization.instance.Localize(text);
         }
     }
 }

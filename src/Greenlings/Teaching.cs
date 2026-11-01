@@ -23,7 +23,22 @@ namespace Greenlings
             Greenling.All.Where(g => g.IsGreenling && g.State == GreenlingState.Watching && g.Teacher == p.GetZDOID()
                                      && Vector3.Distance(g.transform.position, p.transform.position) < 40f);
 
-        public static bool Active => Player.m_localPlayer && Watchers(Player.m_localPlayer).Any();
+        private static int _activeFrame = -1;
+        private static bool _active;
+
+        /// <summary>Whether anyone is watching the local player (checked once per frame: hooks ask a lot).</summary>
+        public static bool Active
+        {
+            get
+            {
+                if (_activeFrame != Time.frameCount)
+                {
+                    _activeFrame = Time.frameCount;
+                    _active = Player.m_localPlayer && Watchers(Player.m_localPlayer).Any();
+                }
+                return _active;
+            }
+        }
 
         /// <summary>Called every frame from the plugin.</summary>
         public static void Update()
@@ -138,7 +153,11 @@ namespace Greenlings
     [HarmonyPatch(typeof(InventoryGui), nameof(InventoryGui.Hide))]
     internal static class ContainerCloseHook
     {
-        private static void Prefix() => Teaching.ScanContainer();
+        private static void Prefix()
+        {
+            try { Teaching.ScanContainer(); }
+            catch (System.Exception e) { Interaction.Fail("ScanContainer", e); }
+        }
     }
 
     /// <summary>Items picked up: from a producer station if one is right there, else from the ground.</summary>
@@ -156,8 +175,12 @@ namespace Greenlings
         {
             if (!__result || !__state.HasValue || !Teaching.Active) return;
             var (item, pos) = __state.Value;
-            if (Teaching.PickableSourceFor(item, out var area)) Teaching.Source(area, item);
-            else Teaching.Source(Breakables.SourceFor(pos) ?? Sources.ProducerFor(pos, item) ?? Endpoint.Ground(pos), item);
+            try
+            {
+                if (Teaching.PickableSourceFor(item, out var area)) Teaching.Source(area, item);
+                else Teaching.Source(Breakables.SourceFor(pos) ?? Sources.ProducerFor(pos, item) ?? Endpoint.Ground(pos), item);
+            }
+            catch (System.Exception e) { Interaction.Fail("Pickup", e); }
         }
     }
 
@@ -181,9 +204,14 @@ namespace Greenlings
     {
         private static void Prefix(ZNetView __instance, string method, object[] parameters)
         {
-            if (GreenlingBrain.Acting || !Teaching.Active || !__instance || !__instance.IsValid()) return;
+            // Runs for every RPC any object sends, so the cheap string test comes first.
             if (method != "RPC_AddOre" && method != "RPC_AddFuel" && method != "RPC_AddItem") return;
-            if (Sinks.FromRpc(__instance, method, parameters, out var sink, out var item)) Teaching.Sink(sink, item);
+            if (GreenlingBrain.Acting || !Teaching.Active || !__instance || !__instance.IsValid()) return;
+            try
+            {
+                if (Sinks.FromRpc(__instance, method, parameters, out var sink, out var item)) Teaching.Sink(sink, item);
+            }
+            catch (System.Exception e) { Interaction.Fail("StationRpc", e); }
         }
     }
 }

@@ -1,0 +1,28 @@
+# gl_uninstall: report, then untame. A carried item is dropped, our keys are cleared, the greenling is a wild greyling again.
+!include _setup.txt
+gldev_place piece_chest_wood -4 4
+gldev_place piece_chest 5 8
+gldev_fill piece_chest_wood Wood 60
+!include _watching.txt
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take Wood 5
+gldev_close
+gldev_open piece_chest
+!wait 0.5
+gldev_put Wood 5
+gldev_close
+!waitfor GLEVT\] take .*item=Wood 30
+gl_uninstall
+!waitfor GLEVT\] uninstall found [1-9]\d* tamed.*[1-9]\d* carrying 5
+gl_uninstall untame
+!waitfor GLEVT\] uninstall done \(untame\): [1-9]\d* untamed, 0 removed, [1-9]\d* carried item\(s\) dropped 5
+gl_uninstall
+!waitfor GLEVT\] uninstall found 0 tamed greenling\(s\)/stray\(s\), 0 wild 5
+# wake the mod again (also so later tests in the same run work): the greyling must stay wild
+gl_uninstall resume
+!waitfor GLEVT\] uninstall resumed 5
+!wait 1.5
+gl_dump 15
+!waitfor GLDUMP\] \{"type":"greyling" 3
+!waitfor GLDUMP\] \{"type":"drops","items":"[^"]*Wood 3

@@ -43,8 +43,8 @@ namespace Greenlings
             p._target = null;
             var pos = g.transform.position;
 
-            p._chest = Object.FindObjectsByType<Container>(FindObjectsSortMode.None)
-                .Where(c => Vector3.Distance(c.transform.position, pos) < 15f && !c.IsInUse() && c.GetInventory().NrOfItems() > 0
+            p._chest = Sources.Near<Container>(pos, 15f)
+                .Where(c => !c.IsInUse() && c.GetInventory().NrOfItems() > 0
                             && c.m_nview && c.m_nview.IsValid() && c.GetComponent<Piece>())
                 .OrderBy(_ => Random.value).FirstOrDefault();
             if (p._chest) options.Add("misplace");
@@ -208,10 +208,9 @@ namespace Greenlings
 
         private void StealFromChest()
         {
-            if (!_chest || _chest.IsInUse()) return;
+            if (!_chest || _chest.IsInUse() || !ChestOwnership.TryOwn(_chest)) return;
             var item = _chest.GetInventory().GetAllItems().Where(i => i.m_dropPrefab).OrderBy(_ => Random.value).FirstOrDefault();
             if (item == null) return;
-            if (!_chest.m_nview.IsOwner()) _chest.m_nview.ClaimOwnership();
             var prefab = item.m_dropPrefab.name;
             _chest.GetInventory().RemoveItem(item, 1); // small hands
             _g.SetCarry(prefab, 1);
@@ -248,10 +247,9 @@ namespace Greenlings
         private static Pickable GiftPickableNear(Vector3 pos, float radius)
         {
             var allowed = Plugin.GiftPickables.Value.Split(',').Select(x => x.Trim()).ToList();
-            return Object.FindObjectsByType<Pickable>(FindObjectsSortMode.None)
+            return Sources.Near<Pickable>(pos, radius)
                 .Where(p => p.m_nview && p.m_nview.IsValid() && !p.m_picked && p.m_itemPrefab
-                            && allowed.Contains(Utils.GetPrefabName(p.gameObject))
-                            && Vector3.Distance(p.transform.position, pos) < radius)
+                            && allowed.Contains(Utils.GetPrefabName(p.gameObject)))
                 .OrderBy(_ => Random.value).FirstOrDefault();
         }
 

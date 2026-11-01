@@ -138,6 +138,7 @@ namespace Greenlings
                 if (!Sources.HasWork(src, task.Item, _g.transform.position)) { DeliverOrWait("source_empty"); return; }
                 if (!Arrive(dt, src.CurrentPos(), Plugin.StationReach.Value)) return;
                 AI.LookAt(src.CurrentPos());
+                ChestOwnership.TryOwn(src.Get<Container>()); // multiplayer: ask for the chest while reaching in
                 if (!Act(dt, "attack")) return; // reach in
                 var got = Sources.TakeFromContainer(src, task.Item, room);
                 if (got > 0) { ChestSound(src); Took(task, got); Enter(Phase.Deliver); }
@@ -241,6 +242,7 @@ namespace Greenlings
             }
             if (!Arrive(dt, task.Sink.CurrentPos(), Plugin.StationReach.Value)) return;
             AI.LookAt(task.Sink.CurrentPos());
+            if (task.Sink.Kind == EndpointKind.Container) ChestOwnership.TryOwn(task.Sink.Get<Container>());
             if (!Act(dt, "throw")) return; // toss it in
 
             bool ok;
@@ -341,6 +343,15 @@ namespace Greenlings
             Enter(Phase.Wait);
         }
 
+        /// <summary>
+        /// Idle with something in its hands and no prank to finish it: a prank cut short by a world
+        /// reload or by ownership moving to another client. Put it down rather than hold it forever.
+        /// </summary>
+        internal void DropOrphanedCarry()
+        {
+            if (_prank == null && _g.State == GreenlingState.Idle && _g.CarryCount > 0) DropCarry("orphaned");
+        }
+
         private void DropCarry(string reason)
         {
             Prank.Drop(_g.transform.position + _g.transform.forward * 0.5f + Vector3.up, _g.CarryItem, _g.CarryCount);
@@ -360,15 +371,23 @@ namespace Greenlings
         {
             var g = __instance.GetComponent<Greenling>();
             if (!g || !g.IsGreenling || !g.IsOwner || !g.Brain.WantsControl) return true;
+            try
+            {
+                __instance.UpdateTarget((Humanoid)__instance.m_character, dt, out _, out _);
+                if (__instance.m_targetCreature != null || __instance.m_timeSinceHurt < 5f) return true;
 
-            __instance.UpdateTarget((Humanoid)__instance.m_character, dt, out _, out _);
-            if (__instance.m_targetCreature != null || __instance.m_timeSinceHurt < 5f) return true;
-
-            // what BaseAI.UpdateAI does for the owner, minus the bits only vanilla movement needs
-            __instance.UpdateRegeneration(dt);
-            __instance.m_timeSinceHurt += dt;
-            __result = g.Brain.Tick(dt);
-            return false;
+                // what BaseAI.UpdateAI does for the owner, minus the bits only vanilla movement needs
+                __instance.UpdateRegeneration(dt);
+                __instance.m_timeSinceHurt += dt;
+                __result = g.Brain.Tick(dt);
+                return false;
+            }
+            catch (System.Exception e)
+            {
+                // never let our brain break the game's AI loop: log once, let vanilla run this frame
+                Interaction.Fail("Brain " + g.State, e);
+                return true;
+            }
         }
     }
 }

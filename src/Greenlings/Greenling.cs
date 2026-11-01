@@ -38,7 +38,7 @@ namespace Greenlings
         private LaborTask _taskCache;
         private string _taskCacheKey;
 
-        public bool IsGreenling => Character && Character.IsTamed();
+        public bool IsGreenling => !Uninstall.Dormant && Character && Character.IsTamed();
         public ZDO Zdo => NView && NView.IsValid() ? NView.GetZDO() : null;
         public bool IsOwner => NView && NView.IsValid() && NView.IsOwner();
 
@@ -165,6 +165,7 @@ namespace Greenlings
             }
             var cur = Curiosity;
             Zdo.Set(ZCuriosity, Mathf.Clamp(cur + (target - cur) * 0.04f + Random.Range(-1f, 1f), 0f, 100f));
+            Brain.DropOrphanedCarry();
             Brain.MaybeMisbehave();
         }
 

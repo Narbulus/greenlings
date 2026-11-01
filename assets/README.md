@@ -41,4 +41,32 @@ Everything (taming time, curiosity, attention span, carry size, mischief) is in
 
 ## Multiplayer
 
-Every player and the server need the mod. Multiplayer has not been tested much yet.
+Every player and the server need the mod (it is not enforced yet, and the config is not synced
+from the server yet: give everyone the same `greenlings.cfg`). Multiplayer has not been tested on a
+dedicated server yet.
+
+## Removing the mod
+
+Greenlings adds no items or buildings of its own, so removing it can't break a world. But without it,
+your greenlings stay **tame**: they become plain, inert greylings that never attack you but fight
+wild creatures, can't be patted, named or taught, and wander around wherever they are. Anything a
+greenling was carrying exists only in the mod's data and would be lost.
+
+To leave a tidy world, run this **before** removing the mod, in single player or on the computer
+hosting the world. Open the console with F5 (if it does not open, add `-console` to Valheim's launch
+options in Steam); no cheats are needed.
+
+| Command | Does |
+|---|---|
+| `gl_uninstall` | Reports what it found and changes nothing. |
+| `gl_uninstall untame` | Turns every greenling and stray back into a wild greyling. **They will attack you**, so stand clear of your base's greenlings. |
+| `gl_uninstall remove` | Deletes every greenling and stray. |
+| `gl_uninstall keep` | Leaves them tame (inert friendly greylings, as above). |
+
+All three put carried items on the ground (by the greenling, or at your feet if it is far away) and
+clear the mod's saved data from every greenling in the world, loaded or not. Afterwards the mod
+goes quiet for the rest of the session: **log out** (this saves the world), then remove the mod.
+`gl_uninstall resume` wakes it up again if you change your mind, but it does not restore what was cleared.
+
+For a dedicated server, copy the world files to your PC, open the world in single player, run the
+command, log out, and copy the files back.
