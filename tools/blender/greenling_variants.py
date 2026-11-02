@@ -56,6 +56,80 @@ def weight_fix(o, rig):
     o["weight_fix"] = {"spine3": len(top), "spine1": len(skirt), "sides": own_side(o), "arm_bleed": arm_bleed(o, rig)}
 
 
+def arm_tube(o, rig, radius=0.11, leaf=None, keep=0.6, keep_reach=0.22):
+    """
+    Strict version of arm_bleed for meshes with leaves draped over the arms (leafy): only the arm's
+    own skin, within `radius` of the arm bone segments, keeps shoulder/arm weights. Everything else
+    rides the torso, so a draped leaf stays put as a cape when the arm moves instead of being split
+    between arm and torso and stretching into strips. The upper arm is thicker than `radius` near the
+    shoulder, so vertices the arm owns (weight >= `keep`) also stay on it unless leaf(vertex index)
+    says they are leaf.
+    """
+    from mathutils.geometry import intersect_point_line
+    H = {b.name: rig.matrix_world @ b.head_local for b in rig.data.bones}
+    names = {g.index: g.name for g in o.vertex_groups}
+
+    def dist(p, s):
+        best = 9.0
+        for a, b in ((f"{s}_arm1", f"{s}_arm2"), (f"{s}_arm2", f"{s}_hand")):
+            _, t = intersect_point_line(p, H[a], H[b])
+            best = min(best, (p - H[a].lerp(H[b], max(0.0, min(1.0, t)))).length)
+        return best
+
+    moved = 0
+    for v in o.data.vertices:
+        p = o.matrix_world @ v.co
+        arm = [(names[g.group], g.weight) for g in v.groups if names[g.group][2:] in ("shoulder", "arm1", "arm2") and g.weight > 0]
+        d = dist(p, "l" if p.x > 0 else "r") if arm else 9.0
+        if not arm or d <= radius:
+            continue
+        # thick upper arm near the shoulder: bark the arm owns, but not the back/top of the body
+        if d <= keep_reach and sum(w for _, w in arm) >= keep and not (leaf and leaf(v.index)):
+            continue
+        for name, _ in arm:
+            o.vertex_groups[name].remove([v.index])
+        o.vertex_groups["spine3"].add([v.index], sum(w for _, w in arm), "ADD")
+        moved += 1
+    return moved
+
+
+def leaf_test(o, image):
+    """leaf(vertex index) -> True where most of the vertex's texels are green (leaves, not bark)."""
+    w, h = image.size
+    pix = image.pixels[:]
+    uv = o.data.uv_layers.active.data
+    votes = {}
+    for li, loop in enumerate(o.data.loops):
+        u, v = uv[li].uv
+        i = (min(h - 1, max(0, int(v * h))) * w + min(w - 1, max(0, int(u * w)))) * 4
+        votes.setdefault(loop.vertex_index, []).append(pix[i + 1] > pix[i] * 1.05)
+    green = {vi for vi, vs in votes.items() if sum(vs) * 2 > len(vs)}
+    return green.__contains__
+
+
+def fill_holes(o, max_sides=12):
+    """
+    Close the small holes a generated mesh can have (back-face culling makes them see-through in
+    game). New corners take the UV their vertex already has elsewhere.
+    """
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    uvl = bm.loops.layers.uv.active
+    known = {}
+    for f in bm.faces:
+        for l in f.loops:
+            known.setdefault(l.vert.index, l[uvl].uv.copy())
+    made = bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=max_sides)["faces"]
+    for f in made:
+        for l in f.loops:
+            if l.vert.index in known:
+                l[uvl].uv = known[l.vert.index]
+    bm.to_mesh(o.data)
+    bm.free()
+    return len(made)
+
+
 def own_side(o, margin=0.04):
     """
     Both shoulder bones start at the same point, so heat weights hand some left-shoulder vertices to
