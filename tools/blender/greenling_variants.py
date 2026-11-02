@@ -107,11 +107,12 @@ def leaf_test(o, image):
     return green.__contains__
 
 
-def fill_holes(o, max_sides=12):
+def fill_holes(o, max_sides=12, image=None):
     """
     Close the small holes a generated mesh can have (back-face culling makes them see-through in
     game). Each patch takes one UV from its rim, i.e. a single texel colour: interpolating the rim's
-    UVs smears stripes across the patch.
+    UVs smears stripes across the patch. With `image`, the rim texel nearest the rim's median colour
+    is used, so a patch doesn't pick up a stray highlight.
     """
     import bmesh
     bm = bmesh.new()
@@ -121,12 +122,63 @@ def fill_holes(o, max_sides=12):
     for f in bm.faces:
         for l in f.loops:
             known.setdefault(l.vert.index, l[uvl].uv.copy())
+    if image:
+        w, h = image.size
+        pix = image.pixels[:]
+
+        def colour(uv):
+            i = (min(h - 1, max(0, int(uv.y * h))) * w + min(w - 1, max(0, int(uv.x * w)))) * 4
+            return pix[i:i + 3]
     made = bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=max_sides)["faces"]
+    # holes_fill skips rims that aren't simple loops (zigzag cuts): close each remaining rim as a
+    # fan of triangles from a new vertex at its centre, carrying the rim's averaged weights
+    deform = bm.verts.layers.deform.active
+    seen = set()
+    for e0 in [e for e in bm.edges if e.is_boundary]:
+        if e0 in seen:
+            continue
+        rim, stack = [], [e0]
+        seen.add(e0)
+        while stack:
+            e = stack.pop()
+            rim.append(e)
+            for v in e.verts:
+                for e2 in v.link_edges:
+                    if e2.is_boundary and e2 not in seen:
+                        seen.add(e2)
+                        stack.append(e2)
+        verts = list({v for e in rim for v in e.verts})
+        centre = bm.verts.new(sum((v.co for v in verts), verts[0].co * 0) / len(verts))
+        if deform:
+            acc = {}
+            for v in verts:
+                for k, wt in v[deform].items():
+                    acc[k] = acc.get(k, 0.0) + wt / len(verts)
+            for k, wt in sorted(acc.items(), key=lambda t: -t[1])[:4]:
+                centre[deform][k] = wt
+        for e in rim:
+            # orient each triangle against its neighbour across the rim edge
+            other = e.link_faces[0]
+            ol = next(x for x in other.loops if x.edge is e)
+            a_, b_ = ol.vert, ol.link_loop_next.vert
+            try:
+                made.append(bm.faces.new((b_, a_, centre)))
+            except ValueError:
+                pass
+
     for f in made:
-        uv = next((known[l.vert.index] for l in f.loops if l.vert.index in known), None)
-        if uv is not None:
-            for l in f.loops:
-                l[uvl].uv = uv
+        rim = [known[l.vert.index] for l in f.loops if l.vert.index in known]
+        if not rim:
+            continue
+        uv = rim[0]
+        if image:
+            cols = [colour(u) for u in rim]
+            med = [sorted(c[k] for c in cols)[len(cols) // 2] for k in range(3)]
+            uv = min(rim, key=lambda u: sum((a - b) ** 2 for a, b in zip(colour(u), med)))
+        for l in f.loops:
+            l[uvl].uv = uv
+    for f in made:
+        f.smooth = True  # new faces default to flat shading, which reads as pale facets
     bm.to_mesh(o.data)
     bm.free()
     return len(made)
@@ -179,6 +231,194 @@ def cut_shoulders(o, rig, image, max_area=0.012):
     bm.to_mesh(o.data)
     bm.free()
     return len(cut)
+
+
+def clip_torso(o, half_width=0.38, z_band=(51.02, 51.45), arm_max=0.3):
+    """
+    Torso-weighted geometry that reaches out along the arms in the bind (T) pose stays horizontal
+    when the arms hang down, and reads as spikes beside them. Clip torso-only faces in the shoulder
+    band to the torso's width (vanilla greyling: ~0.35 half-width there) and cap the cut. Faces that
+    involve the arm (any vertex with arm weight > arm_max) are left alone: they are the arm and armpit.
+    """
+    import bmesh
+    from mathutils import Vector
+    arm_bones = ("arm1", "arm2", "hand", "index1", "index2", "middle1", "middle2", "pinky1", "pinky2")
+    arm_ids = [g.index for g in o.vertex_groups if g.name[2:] in arm_bones]
+    sp3 = o.vertex_groups["spine3"].index
+    M = o.matrix_world
+    Mi = M.inverted()
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    deform = bm.verts.layers.deform.active
+
+    def arm_w(v):
+        d = v[deform]
+        return sum(d.get(i, 0.0) for i in arm_ids)
+
+    removed = 0
+    for side in (1, -1):
+        sel = [f for f in bm.faces
+               if all(arm_w(v) <= arm_max for v in f.verts)
+               and z_band[0] < (M @ f.calc_center_median()).z < z_band[1]
+               and any((M @ v.co).x * side > half_width for v in f.verts)]
+        if not sel:
+            continue
+        geom = list({e for f in sel for e in f.edges}) + sel + list({v for f in sel for v in f.verts})
+        co = Mi @ Vector((side * half_width, 0, 0))
+        no = (Mi.to_3x3() @ Vector((side, 0, 0))).normalized()
+        before = len(bm.faces)
+        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=co, plane_no=no, clear_outer=True)
+        removed += before - len(bm.faces)
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+        # new cut vertices normally carry interpolated weights; any without go to spine3
+        for v in bm.verts:
+            if not v[deform]:
+                v[deform][sp3] = 1.0
+    bm.to_mesh(o.data)
+    bm.free()
+    return removed
+
+
+def hug_arm(o, rig, radius=0.075):
+    """
+    Pull arm-owned vertices (leaf fringe on the upper arm) in to `radius` around the arm bones, so
+    they lie on the arm instead of standing off it as plates when the arm hangs down.
+    """
+    from mathutils.geometry import intersect_point_line
+    H = {b.name: rig.matrix_world @ b.head_local for b in rig.data.bones}
+    names = {g.index: g.name for g in o.vertex_groups}
+    M = o.matrix_world
+    Mi = M.inverted()
+    pulled = 0
+    for v in o.data.vertices:
+        p = M @ v.co
+        w = sum(g.weight for g in v.groups if names[g.group][2:] in ("shoulder", "arm1", "arm2", "hand"))
+        if w < 0.5 or abs(p.x) < 0.2:
+            continue
+        s = "l" if p.x > 0 else "r"
+        best = None
+        for a, b in ((f"{s}_arm1", f"{s}_arm2"), (f"{s}_arm2", f"{s}_hand")):
+            _, t = intersect_point_line(p, H[a], H[b])
+            q = H[a].lerp(H[b], max(0.0, min(1.0, t)))
+            if best is None or (p - q).length < (p - best).length:
+                best = q
+        if (p - best).length > radius:
+            v.co = Mi @ p.lerp(best + (p - best).normalized() * radius, min(1.0, w))
+            pulled += 1
+    return pulled
+
+
+ARM_TEST_POSES = (
+    {"l_arm1": (0, 0, -60), "r_arm1": (0, 0, 60)},                                    # arms hanging
+    {"l_arm1": (-70, 0, -20), "r_arm1": (-70, 0, 20)},                                # reaching forward
+    {"l_arm1": (0, 0, -80), "r_arm1": (0, 0, 80), "l_arm2": (0, 0, -40), "r_arm2": (0, 0, 40)},
+)
+
+
+def remove_stretch(o, rig, image=None, ratio=1.8, min_len=0.08, passes=4):
+    """
+    Pose the rig through ARM_TEST_POSES, find edges that stretch more than `ratio` (and end up longer
+    than `min_len`), delete their faces plus any small floating fragments left behind, and fill the
+    holes. Repeats until nothing stretches. Returns faces removed per pass.
+    """
+    import math
+    import bmesh
+
+    def lengths():
+        bpy.context.view_layer.update()
+        ev = o.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        me = ev.to_mesh()
+        co = [o.matrix_world @ v.co for v in me.vertices]
+        out = {tuple(sorted(e.vertices)): (co[e.vertices[0]] - co[e.vertices[1]]).length for e in me.edges}
+        ev.to_mesh_clear()
+        return out
+
+    def pose(p):
+        for pb in rig.pose.bones:
+            pb.rotation_mode = "XYZ"
+            pb.rotation_euler = (0, 0, 0)
+        for b, e in p.items():
+            rig.pose.bones[b].rotation_euler = tuple(math.radians(a) for a in e)
+
+    log = []
+    for _ in range(passes):
+        pose({})
+        rest = lengths()
+        worst = {}
+        for p in ARM_TEST_POSES:
+            pose(p)
+            for k, l1 in lengths().items():
+                if rest.get(k, 0) > 1e-5:
+                    worst[k] = max(worst.get(k, 0), l1 / rest[k])
+        pose({})
+        bad = {k for k, s in worst.items() if s > ratio and rest[k] * s > min_len}
+        faces = [f.index for f in o.data.polygons if any(tuple(sorted(e)) in bad for e in f.edge_keys)]
+        log.append(len(faces))
+        if not faces:
+            break
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        bm.faces.ensure_lookup_table()
+        bmesh.ops.delete(bm, geom=[bm.faces[i] for i in faces], context="FACES")
+        seen, drop = set(), []
+        for v in bm.verts:
+            if v in seen:
+                continue
+            comp, stack = [], [v]
+            seen.add(v)
+            while stack:
+                x = stack.pop()
+                comp.append(x)
+                for e in x.link_edges:
+                    y = e.other_vert(x)
+                    if y not in seen:
+                        seen.add(y)
+                        stack.append(y)
+            if len(comp) < 25:
+                drop += comp
+        bmesh.ops.delete(bm, geom=drop, context="VERTS")
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+        bm.to_mesh(o.data)
+        bm.free()
+        fill_holes(o, max_sides=64, image=image)
+    return log
+
+
+def smooth_shoulders(o, iterations=6, x_range=(0.12, 0.55), z_range=(50.85, 51.65)):
+    """
+    Spread the arm/torso weight transition over the shoulder region (Laplacian smoothing of all
+    weights there, renormalised to 4 influences), so a hanging arm bends the side of the body
+    gradually instead of stretching one row of large low-poly faces into a web.
+    """
+    import bmesh
+    M = o.matrix_world
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bm.verts.ensure_lookup_table()
+    region = [v.index for v in bm.verts
+              if x_range[0] < abs((M @ v.co).x) < x_range[1] and z_range[0] < (M @ v.co).z < z_range[1]]
+    nbrs = {i: [e.other_vert(bm.verts[i]).index for e in bm.verts[i].link_edges] for i in region}
+    bm.free()
+    weights = [{g.group: g.weight for g in v.groups} for v in o.data.vertices]
+    for _ in range(iterations):
+        new = {}
+        for i in region:
+            acc = dict(weights[i])
+            for j in nbrs[i]:
+                for k, w in weights[j].items():
+                    acc[k] = acc.get(k, 0.0) + w
+            n = 1 + len(nbrs[i])
+            top = sorted(((k, w / n) for k, w in acc.items()), key=lambda t: -t[1])[:4]
+            total = sum(w for _, w in top) or 1.0
+            new[i] = {k: w / total for k, w in top}
+        for i, d in new.items():
+            weights[i] = d
+    for i in region:
+        for g in list(o.data.vertices[i].groups):
+            o.vertex_groups[g.group].remove([i])
+        for k, w in weights[i].items():
+            o.vertex_groups[k].add([i], w, "REPLACE")
+    return len(region)
 
 
 def own_side(o, margin=0.04):
