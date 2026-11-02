@@ -129,6 +129,7 @@ def fill_holes(o, max_sides=12, image=None):
         def colour(uv):
             i = (min(h - 1, max(0, int(uv.y * h))) * w + min(w - 1, max(0, int(uv.x * w)))) * 4
             return pix[i:i + 3]
+    bm.normal_update()
     made = bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=max_sides)["faces"]
     # holes_fill skips rims that aren't simple loops (zigzag cuts): close each remaining rim as a
     # fan of triangles from a new vertex at its centre, carrying the rim's averaged weights
@@ -148,7 +149,13 @@ def fill_holes(o, max_sides=12, image=None):
                         seen.add(e2)
                         stack.append(e2)
         verts = list({v for e in rim for v in e.verts})
-        centre = bm.verts.new(sum((v.co for v in verts), verts[0].co * 0) / len(verts))
+        mid = sum((v.co for v in verts), verts[0].co * 0) / len(verts)
+        # dome the patch outward along the surrounding surface so it isn't a sunken flat fan
+        normal = sum((f.normal for e in rim for f in e.link_faces), verts[0].co * 0)
+        radius = sum((v.co - mid).length for v in verts) / len(verts)
+        if normal.length > 1e-6:
+            mid = mid + normal.normalized() * radius * 0.35
+        centre = bm.verts.new(mid)
         if deform:
             acc = {}
             for v in verts:
@@ -419,6 +426,36 @@ def smooth_shoulders(o, iterations=6, x_range=(0.12, 0.55), z_range=(50.85, 51.6
         for k, w in weights[i].items():
             o.vertex_groups[k].add([i], w, "REPLACE")
     return len(region)
+
+
+def rebake(o, rig, fit_rig, high, out_png, size=256):
+    """
+    New UVs and texture for the finished game mesh, baked from the generated high-detail model, so
+    patches left by cuts and hole fills get real bark/leaf texture instead of one stretched texel.
+    The game mesh sits in the vanilla bind pose; it is posed back into the generated model's pose
+    (the fitted rig's rest) for the bake, then the UVs are copied over loop for loop.
+    """
+    import greenling_tripo as gt
+    rest = {b.name: b.matrix_local.copy() for b in fit_rig.data.bones}
+    for pb in sorted(rig.pose.bones, key=lambda pb: len(pb.parent_recursive)):
+        pb.matrix = rest[pb.name]
+        bpy.context.view_layer.update()
+    ev = o.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    tmp_mesh = bpy.data.meshes.new_from_object(ev)
+    for pb in rig.pose.bones:
+        pb.matrix_basis.identity()
+    bpy.context.view_layer.update()
+    tmp = bpy.data.objects.new(o.name + "_bake", tmp_mesh)
+    tmp.matrix_world = o.matrix_world.copy()
+    for c in o.users_collection:
+        c.objects.link(tmp)
+    gt.bake_texture(high, tmp, out_png, size)
+    src = tmp.data.uv_layers.active.data
+    dst = o.data.uv_layers.active.data
+    for i in range(len(dst)):
+        dst[i].uv = src[i].uv
+    bpy.data.objects.remove(tmp, do_unlink=True)
+    return out_png
 
 
 def own_side(o, margin=0.04):
