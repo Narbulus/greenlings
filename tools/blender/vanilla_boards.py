@@ -98,7 +98,9 @@ def stand(rig, lift):
     return []
 
 
-def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=2.4, lift=0.12):
+def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=2.4, lift=0.12, parts=None, tag=""):
+    """parts: renderer names to show (None = all; "Cube" = body, "Cube.001" = back piece, "Plane*" = eyes).
+    Framing follows the shown parts; files are <prefab><tag>_<view>.png."""
     tex_name, hue, sat, eye = PREFABS[prefab]
     name = "VB_" + prefab
     old = bpy.data.collections.get(name)
@@ -112,6 +114,7 @@ def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=2.4, lift=
     eye_mat.diffuse_color = (*eye, 1)
     meshes = [o for o in coll.objects if o.type == "MESH"]
     for o in meshes:
+        o.hide_render = False
         if o.get("game_renderer", "").startswith("Plane"):
             o.data.materials.clear()
             o.data.materials.append(eye_mat)
@@ -126,6 +129,8 @@ def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=2.4, lift=
     rig = next(o for o in coll.objects if o.type == "ARMATURE")
     height = max((o.matrix_world @ v.co).z for o in meshes for v in o.data.vertices) - 50.0
     helpers = stand(rig, lift * height) if lift else []
+    if parts is not None:
+        meshes = [o for o in meshes if any(o.get("game_renderer", "") == p or (p.endswith("*") and o.get("game_renderer", "").startswith(p[:-1])) for p in parts)]
     dg = bpy.context.evaluated_depsgraph_get()
     ps = []
     for o in meshes:
@@ -167,7 +172,7 @@ def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=2.4, lift=
             # the creature faces -Y; yaw 0 puts the camera in front of it
             cam.location = centre + Vector((math.sin(a) * 10, -math.cos(a) * 10, 0))
             cam.rotation_euler = (centre - cam.location).to_track_quat("-Z", "Y").to_euler()
-            sc.render.filepath = os.path.join(out_dir, f"{prefab}_{view}.png")
+            sc.render.filepath = os.path.join(out_dir, f"{prefab}{tag}_{view}.png")
             bpy.ops.render.render(write_still=True)
             paths.append(sc.render.filepath)
     finally:
