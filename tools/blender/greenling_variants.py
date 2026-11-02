@@ -110,7 +110,8 @@ def leaf_test(o, image):
 def fill_holes(o, max_sides=12):
     """
     Close the small holes a generated mesh can have (back-face culling makes them see-through in
-    game). New corners take the UV their vertex already has elsewhere.
+    game). Each patch takes one UV from its rim, i.e. a single texel colour: interpolating the rim's
+    UVs smears stripes across the patch.
     """
     import bmesh
     bm = bmesh.new()
@@ -122,12 +123,62 @@ def fill_holes(o, max_sides=12):
             known.setdefault(l.vert.index, l[uvl].uv.copy())
     made = bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=max_sides)["faces"]
     for f in made:
-        for l in f.loops:
-            if l.vert.index in known:
-                l[uvl].uv = known[l.vert.index]
+        uv = next((known[l.vert.index] for l in f.loops if l.vert.index in known), None)
+        if uv is not None:
+            for l in f.loops:
+                l[uvl].uv = uv
     bm.to_mesh(o.data)
     bm.free()
     return len(made)
+
+
+def cut_shoulders(o, rig, image, max_area=0.012):
+    """
+    Remove the leaf flaps that stand over the shoulders, and the twig on the left
+    shoulder (leafy brief): they cannot follow both arm and torso without stretching, and the body
+    has detail enough without them. Green faces only, and not the few large ones (body surface).
+    Returns faces removed; run fill_holes afterwards.
+    """
+    import bmesh
+    from mathutils.geometry import intersect_point_line
+    H = {b.name: rig.matrix_world @ b.head_local for b in rig.data.bones}
+
+    def adist(p):
+        s = "l" if p.x > 0 else "r"
+        best = 9.0
+        for a, b in ((f"{s}_arm1", f"{s}_arm2"), (f"{s}_arm2", f"{s}_hand")):
+            _, t = intersect_point_line(p, H[a], H[b])
+            best = min(best, (p - H[a].lerp(H[b], max(0.0, min(1.0, t)))).length)
+        return best
+
+    w, h = image.size
+    pix = image.pixels[:]
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    uvl = bm.loops.layers.uv.active
+    M = o.matrix_world
+
+    def green(f):
+        g = 0
+        for l in f.loops:
+            u, v = l[uvl].uv
+            i = (min(h - 1, max(0, int(v * h))) * w + min(w - 1, max(0, int(u * w)))) * 4
+            g += pix[i + 1] > pix[i] * 1.05
+        return g * 2 > len(f.loops)
+
+    cut = []
+    for f in bm.faces:
+        c = M @ f.calc_center_median()
+        small = f.calc_area() * (M.to_scale()[0] ** 2) < max_area
+        flap = 0.28 < abs(c.x) < 0.65 and 51.3 < c.z < 51.7 and adist(c) > 0.1 and small and green(f)
+        twig = 0.15 < c.x < 0.65 and c.z >= 51.45
+        if flap or twig:
+            cut.append(f)
+    bmesh.ops.delete(bm, geom=cut, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(o.data)
+    bm.free()
+    return len(cut)
 
 
 def own_side(o, margin=0.04):
