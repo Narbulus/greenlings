@@ -1,0 +1,132 @@
+"""
+Reference boards of the vanilla creatures, laid out like the Tripo briefs: one image, four views
+side by side (front, side facing image right, side facing image left, back), bind pose (arms out),
+orthographic, game textures, dark background.
+
+    import vanilla_boards as vb
+    vb.render_all(r"<repo>/.work/model/vanilla", r"<out dir>")
+
+Inputs per prefab in the vanilla dir: <Prefab>.json (gldev_export, root at the origin facing -Y)
+and texture_<material>.png (gldev_photo). Shader colour shifts (_Hue/_Saturation, greyling only)
+are applied to the texture so the board matches the game.
+"""
+import colorsys
+import math
+import os
+
+import bpy
+from mathutils import Vector
+
+import greenling_io as gio
+
+PREFABS = {
+    # prefab: (skin texture, shader hue, shader saturation, eye colour)
+    "Greyling": ("texture_greyling.png", -0.03, 0.121, (1.0, 0.8, 0.2)),
+    "Greydwarf": ("texture_greydwarf.png", 0.0, 0.0, (0.4, 0.6, 1.0)),
+    "Greydwarf_Elite": ("texture_greydwarf_elite.png", 0.0, 0.0, (1.0, 0.1, 0.2)),
+    "Greydwarf_Shaman": ("texture_greydwarf_shaman.png", 0.0, 0.0, (0.4, 1.0, 0.3)),
+}
+BG = (0.141, 0.141, 0.141)    # the briefs' background, #242424
+VIEWS = (("front", 0), ("right", 90), ("left", -90), ("back", 180))   # camera yaw around the creature
+
+
+def _shader_texture(path, hue, sat):
+    img = bpy.data.images.load(path, check_existing=False)
+    if hue or sat:
+        px = list(img.pixels)
+        for i in range(0, len(px), 4):
+            h, s, v = colorsys.rgb_to_hsv(px[i], px[i + 1], px[i + 2])
+            px[i:i + 3] = colorsys.hsv_to_rgb((h + hue) % 1.0, min(1.0, s + sat), v)
+        img.pixels[:] = px
+    img.alpha_mode = "NONE"   # some exports carry alpha=0 texels; the game ignores alpha here
+    return img
+
+
+def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=1.6):
+    tex_name, hue, sat, eye = PREFABS[prefab]
+    name = "VB_" + prefab
+    old = bpy.data.collections.get(name)
+    if old:
+        for o in list(old.objects):
+            bpy.data.objects.remove(o, do_unlink=True)
+        bpy.data.collections.remove(old)
+    coll = gio.import_creature(os.path.join(vanilla_dir, prefab + ".json"), name=name)
+    img = _shader_texture(os.path.join(vanilla_dir, tex_name), hue, sat)
+    eye_mat = bpy.data.materials.new(name + "_eye")
+    eye_mat.diffuse_color = (*eye, 1)
+    meshes = [o for o in coll.objects if o.type == "MESH"]
+    for o in meshes:
+        if o.get("game_renderer", "").startswith("Plane"):
+            o.data.materials.clear()
+            o.data.materials.append(eye_mat)
+        else:
+            mat = o.data.materials[0]
+            nodes = mat.node_tree.nodes
+            tex = next((n for n in nodes if n.type == "TEX_IMAGE"), None) or nodes.new("ShaderNodeTexImage")
+            tex.image = img
+            tex.interpolation = "Closest"
+            nodes.active = tex   # Workbench shows the active image node
+            mat.node_tree.links.new(tex.outputs["Color"], nodes["Principled BSDF"].inputs["Base Color"])
+    ps = [o.matrix_world @ v.co for o in meshes for v in o.data.vertices]
+    lo = Vector((min(p.x for p in ps), min(p.y for p in ps), min(p.z for p in ps)))
+    hi = Vector((max(p.x for p in ps), max(p.y for p in ps), max(p.z for p in ps)))
+    centre = (lo + hi) / 2
+    span = max(hi.x - lo.x, hi.y - lo.y, (hi.z - lo.z) * view_px[0] / view_px[1]) * 1.08
+
+    sc = bpy.context.scene
+    cam = bpy.data.objects.get("BoardCam") or bpy.data.objects.new("BoardCam", bpy.data.cameras.new("BoardCam"))
+    if cam.name not in sc.collection.objects:
+        sc.collection.objects.link(cam)
+    cam.data.type = "ORTHO"
+    cam.data.ortho_scale = span
+    vs = sc.view_settings
+    prev = (sc.camera, sc.render.engine, sc.render.resolution_x, sc.render.resolution_y, sc.render.film_transparent,
+            vs.view_transform, vs.exposure)
+    sc.camera = cam
+    sc.render.engine = "BLENDER_WORKBENCH"
+    sc.render.resolution_x, sc.render.resolution_y = view_px
+    sc.render.film_transparent = True   # composited onto BG afterwards (board())
+    vs.view_transform, vs.exposure = "Standard", exposure   # the game lights its creatures much brighter
+    sh = sc.display.shading
+    sh.light, sh.color_type, sh.show_cavity, sh.show_shadows = "STUDIO", "TEXTURE", False, False
+    sh.show_xray, sh.show_specular_highlight, sh.show_object_outline = False, False, False
+    others = {o.name: o.hide_render for o in sc.objects if o.type == "MESH"}
+    for o in sc.objects:
+        if o.type == "MESH":
+            o.hide_render = o not in meshes
+    paths = []
+    try:
+        for view, yaw in VIEWS:
+            a = math.radians(yaw)
+            # the creature faces -Y; yaw 0 puts the camera in front of it
+            cam.location = centre + Vector((math.sin(a) * 10, -math.cos(a) * 10, 0))
+            cam.rotation_euler = (centre - cam.location).to_track_quat("-Z", "Y").to_euler()
+            sc.render.filepath = os.path.join(out_dir, f"{prefab}_{view}.png")
+            bpy.ops.render.render(write_still=True)
+            paths.append(sc.render.filepath)
+    finally:
+        (sc.camera, sc.render.engine, sc.render.resolution_x, sc.render.resolution_y, sc.render.film_transparent,
+         vs.view_transform, vs.exposure) = prev
+        for o in sc.objects:
+            if o.name in others:
+                o.hide_render = others[o.name]
+        for o in meshes:
+            o.hide_render = True
+    return paths
+
+
+def board(paths, out_png):
+    """Four transparent view renders side by side on the briefs' background."""
+    from PIL import Image
+    ims = [Image.open(p).convert("RGBA") for p in paths]
+    w, h = ims[0].size
+    out = Image.new("RGBA", (w * len(ims), h), tuple(int(c * 255) for c in BG) + (255,))
+    for i, im in enumerate(ims):
+        out.alpha_composite(im, (i * w, 0))
+    out.convert("RGB").save(out_png)
+    return out_png
+
+
+def render_all(vanilla_dir, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    return {p: board(render(p, vanilla_dir, out_dir), os.path.join(out_dir, f"board_{p}.png")) for p in PREFABS}
