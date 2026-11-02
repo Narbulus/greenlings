@@ -42,7 +42,63 @@ def _shader_texture(path, hue, sat):
     return img
 
 
-def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=1.6):
+PARENTS = {
+    "l_hip": "root", "l_leg1": "l_hip", "l_leg2": "l_leg1", "l_foot": "l_leg2",
+    "r_hip": "root", "r_leg1": "r_hip", "r_leg2": "r_leg1", "r_foot": "r_leg2",
+    "spine1": "root", "spine2": "spine1", "spine3": "spine2", "head": "spine3",
+    "l_shoulder": "spine3", "l_arm1": "l_shoulder", "l_arm2": "l_arm1", "l_hand": "l_arm2",
+    "r_shoulder": "spine3", "r_arm1": "r_shoulder", "r_arm2": "r_arm1", "r_hand": "r_arm2",
+}
+for _s in "lr":
+    for _f in ("index", "middle", "pinky"):
+        PARENTS[f"{_s}_{_f}1"] = f"{_s}_hand"
+        PARENTS[f"{_s}_{_f}2"] = f"{_s}_{_f}1"
+
+
+def stand(rig, lift):
+    """
+    Straighten the bind pose's deep crouch toward the in-game stance: raise everything by `lift`
+    (world units) and re-solve each leg (two bones, lengths kept) so the feet stay planted and the
+    knees bend in their original plane. Arms stay straight out. Returns helper objects (none).
+    """
+    from mathutils import Matrix
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = rig.data.edit_bones
+    for child, parent in PARENTS.items():
+        if child in eb and parent in eb:
+            eb[child].parent = eb[parent]
+    bpy.ops.object.mode_set(mode="OBJECT")
+    W = rig.matrix_world
+    Wi = W.inverted()
+    rest = {b.name: W @ b.matrix_local for b in rig.data.bones}   # world space
+    head = {n: m.translation.copy() for n, m in rest.items()}
+    up = Vector((0, 0, lift))
+    want = {"root": Matrix.Translation(up) @ rest["root"]}
+    for side in "lr":
+        hip0, knee0, foot = head[f"{side}_leg1"], head[f"{side}_leg2"], head[f"{side}_foot"]
+        hip = hip0 + up
+        a, b = (knee0 - hip0).length, (foot - knee0).length
+        to_foot = foot - hip
+        d = min(to_foot.length, (a + b) * 0.999)
+        axis = to_foot.normalized()
+        bend = (knee0 - hip0) - axis * (knee0 - hip0).dot(axis)   # knee direction off the hip-foot line
+        bend = bend.normalized() if bend.length > 1e-6 else Vector((0, -1, 0))
+        along = (a * a - b * b + d * d) / (2 * d)
+        knee = hip + axis * along + bend * max(0.0, a * a - along * along) ** 0.5
+        r1 = (knee0 - hip0).normalized().rotation_difference((knee - hip).normalized()).to_matrix().to_4x4()
+        r2 = (foot - knee0).normalized().rotation_difference((foot - knee).normalized()).to_matrix().to_4x4()
+        want[f"{side}_leg1"] = Matrix.Translation(hip) @ r1 @ Matrix.Translation(-hip0) @ rest[f"{side}_leg1"]
+        want[f"{side}_leg2"] = Matrix.Translation(knee) @ r2 @ Matrix.Translation(-knee0) @ rest[f"{side}_leg2"]
+        want[f"{side}_foot"] = rest[f"{side}_foot"]
+    for pb in sorted(rig.pose.bones, key=lambda pb: len(pb.parent_recursive)):
+        if pb.name in want:
+            pb.matrix = Wi @ want[pb.name]
+            bpy.context.view_layer.update()
+    return []
+
+
+def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=2.4, lift=0.12):
     tex_name, hue, sat, eye = PREFABS[prefab]
     name = "VB_" + prefab
     old = bpy.data.collections.get(name)
@@ -67,11 +123,21 @@ def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=1.6):
             tex.interpolation = "Closest"
             nodes.active = tex   # Workbench shows the active image node
             mat.node_tree.links.new(tex.outputs["Color"], nodes["Principled BSDF"].inputs["Base Color"])
-    ps = [o.matrix_world @ v.co for o in meshes for v in o.data.vertices]
+    rig = next(o for o in coll.objects if o.type == "ARMATURE")
+    height = max((o.matrix_world @ v.co).z for o in meshes for v in o.data.vertices) - 50.0
+    helpers = stand(rig, lift * height) if lift else []
+    dg = bpy.context.evaluated_depsgraph_get()
+    ps = []
+    for o in meshes:
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        ps += [o.matrix_world @ v.co for v in me.vertices]
+        ev.to_mesh_clear()
     lo = Vector((min(p.x for p in ps), min(p.y for p in ps), min(p.z for p in ps)))
     hi = Vector((max(p.x for p in ps), max(p.y for p in ps), max(p.z for p in ps)))
     centre = (lo + hi) / 2
-    span = max(hi.x - lo.x, hi.y - lo.y, (hi.z - lo.z) * view_px[0] / view_px[1]) * 1.08
+    # ortho_scale spans the render's longer side (the height here)
+    span = max(max(hi.x - lo.x, hi.y - lo.y) * view_px[1] / view_px[0], hi.z - lo.z) * 1.06
 
     sc = bpy.context.scene
     cam = bpy.data.objects.get("BoardCam") or bpy.data.objects.new("BoardCam", bpy.data.cameras.new("BoardCam"))
@@ -112,6 +178,8 @@ def render(prefab, vanilla_dir, out_dir, view_px=(600, 800), exposure=1.6):
                 o.hide_render = others[o.name]
         for o in meshes:
             o.hide_render = True
+        for e in helpers:
+            bpy.data.objects.remove(e, do_unlink=True)
     return paths
 
 
