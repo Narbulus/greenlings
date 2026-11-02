@@ -66,6 +66,7 @@ namespace Greenlings
         private static Dictionary<string, Mesh> _meshes = new Dictionary<string, Mesh>();
         private static Dictionary<string, string[]> _boneNames = new Dictionary<string, string[]>();
         private static Texture2D _texture;
+        private static string _path; // last file loaded; "gl_model reload" reloads it
         internal static bool Enabled = true;
         private static int _version;
 
@@ -82,7 +83,11 @@ namespace Greenlings
         /// <summary>Load (or reload) the model file. Returns a one-line report.</summary>
         public static string Load(string path = null)
         {
-            path = path ?? DefaultPath;
+            path = path ?? _path ?? DefaultPath;
+            // a bare name picks a variant next to the default file: "gl_model leafy" -> models/leafy.glmesh
+            if (!Path.IsPathRooted(path) && !File.Exists(path))
+                path = Path.Combine(Path.GetDirectoryName(DefaultPath), Path.HasExtension(path) ? path : path + ".glmesh");
+            _path = path;
             if (!File.Exists(path)) { _meshes = new Dictionary<string, Mesh>(); _version++; return "no model file at " + path; }
             var entries = Parse(File.ReadAllText(path));
             if (entries.Count == 0) { _meshes = new Dictionary<string, Mesh>(); _version++; return "model file has no meshes: " + path; }
@@ -264,7 +269,7 @@ namespace Greenlings
         {
             private static void Postfix()
             {
-                new Terminal.ConsoleCommand("gl_model", "[reload|on|off|<path>] greenling remodel: reload the model file, toggle it, or load another file", args =>
+                new Terminal.ConsoleCommand("gl_model", "[reload|on|off|<name>|<path>] greenling remodel: reload the model file, toggle it, or load models/<name>.glmesh or another file", args =>
                 {
                     var arg = args.Length > 1 ? args.FullLine.Substring(args.FullLine.IndexOf(' ') + 1).Trim() : "reload";
                     string report;

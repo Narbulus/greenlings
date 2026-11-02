@@ -90,10 +90,11 @@ def bake_texture(high, low, out_png, size=256, bake_size=1024, margin_px=2):
     bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=margin_px * 2.0 / size)
     bpy.ops.object.mode_set(mode="OBJECT")
 
-    img = bpy.data.images.get(os.path.basename(out_png))
+    img_name = low.name + "_" + os.path.basename(out_png)  # per object: several bakes share the file name
+    img = bpy.data.images.get(img_name)
     if img:
         bpy.data.images.remove(img)
-    img = bpy.data.images.new(os.path.basename(out_png), bake_size, bake_size, alpha=False)
+    img = bpy.data.images.new(img_name, bake_size, bake_size, alpha=False)
     mat = bpy.data.materials.new(low.name + "_mat")
     mat.use_nodes = True
     nodes = mat.node_tree.nodes
