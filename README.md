@@ -20,7 +20,8 @@ Spiritual successor to [RagnarsRokare/SlaveGreylings](https://github.com/di98fej
 - r2modman profile **GreenlingsDev** (BepInExPack only). Paths are in `Directory.Build.props`;
   override per machine in `Directory.Build.user.props`.
 
-See [TESTING.md](TESTING.md) for hands-on playtesting (testbed, commands, what to try).
+**Wiki:** `docs/` (MkDocs Material): player guide, implementation status, roadmap and dev docs.
+Preview with `.venv-docs/Scripts/mkdocs serve` (setup in [docs/dev/wiki.md](docs/dev/wiki.md)); deployed to GitHub Pages by `.github/workflows/docs.yml`.
 
 ## Dev loop
 

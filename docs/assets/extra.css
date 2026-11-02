@@ -1,0 +1,18 @@
+/* Status pills used on the status and roadmap pages: <span class="st ok">tested</span> */
+.st {
+  display: inline-block;
+  padding: 0 .5em;
+  border-radius: .7em;
+  font-size: .75em;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+}
+.st.ok    { color: #2e7d32; }
+.st.built { color: #b26a00; }
+.st.part  { color: #6a5acd; }
+.st.plan  { color: #757575; }
+[data-md-color-scheme="slate"] .st.ok    { color: #81c784; }
+[data-md-color-scheme="slate"] .st.built { color: #ffb74d; }
+[data-md-color-scheme="slate"] .st.part  { color: #b39ddb; }
+[data-md-color-scheme="slate"] .st.plan  { color: #bdbdbd; }
