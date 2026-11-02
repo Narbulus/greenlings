@@ -322,11 +322,12 @@ ARM_TEST_POSES = (
 )
 
 
-def remove_stretch(o, rig, image=None, ratio=1.8, min_len=0.08, passes=4):
+def remove_stretch(o, rig, image=None, ratio=1.8, min_len=0.08, passes=4, dry=False):
     """
     Pose the rig through ARM_TEST_POSES, find edges that stretch more than `ratio` (and end up longer
     than `min_len`), delete their faces plus any small floating fragments left behind, and fill the
-    holes. Repeats until nothing stretches. Returns faces removed per pass.
+    holes. Repeats until nothing stretches. Returns faces removed per pass; with dry=True, only
+    reports the stretching face indices (nothing is changed).
     """
     import math
     import bmesh
@@ -360,6 +361,8 @@ def remove_stretch(o, rig, image=None, ratio=1.8, min_len=0.08, passes=4):
         pose({})
         bad = {k for k, s in worst.items() if s > ratio and rest[k] * s > min_len}
         faces = [f.index for f in o.data.polygons if any(tuple(sorted(e)) in bad for e in f.edge_keys)]
+        if dry:
+            return faces
         log.append(len(faces))
         if not faces:
             break
@@ -511,9 +514,9 @@ def arm_bleed(o, rig, reach=0.18, keep=0.6):
     return moved
 
 
-def finish(name, leg_x, arm_dz, eyes, out_json, template_json, eye_push=0.012):
+def finish(name, leg_x, arm_dz, eyes, out_json, template_json, eye_push=0.012, arm_dy=0.13):
     o = bpy.data.objects[name]
-    info = gt.rig_to_vanilla(o, RIG, targets(leg_x, arm_dz), weight_fix=weight_fix)
+    info = gt.rig_to_vanilla(o, RIG, targets(leg_x, arm_dz, arm_dy), weight_fix=weight_fix)
     bpy.ops.object.select_all(action="DESELECT")
     bpy.context.view_layer.objects.active = o
     o.select_set(True)
@@ -525,3 +528,154 @@ def finish(name, leg_x, arm_dz, eyes, out_json, template_json, eye_push=0.012):
     names = {g.index: g.name for g in o.vertex_groups}
     dom = collections.Counter(names[max(v.groups, key=lambda g: g.weight).group] if v.groups else None for v in o.data.vertices)
     return {**info, "fix": dict(o["weight_fix"]), "counts": counts, "unweighted": dom.get(None, 0)}
+
+
+# ---------------------------------------------------------------- automatic pipeline
+
+REACH = 1.37         # fingertip x of the free (empty) hand, in rig space; the first models' scale
+VANILLA_ARM = (-0.07, 51.21)   # vanilla arm bone (y, z) around the forearm
+
+
+def import_auto(glb, name, coll_name):
+    """
+    Import a generated model scaled so the free hand reaches REACH and centred on its feet. Tripo
+    normalises each model to its bounding box, so a club or a staff would otherwise shrink the body.
+    Returns (object, held_side): held_side is "r"/"l" when one hand holds something (its outer
+    arm is much thicker than the other's), else None.
+    """
+    o = gt.import_generated(glb, name, scale=1.0, coll_name=coll_name)
+    ps = [v.co for v in o.data.vertices]
+    zmin = min(p.z for p in ps)
+    h = max(p.z for p in ps) - zmin
+    feet = [p for p in ps if p.z < zmin + 0.08 * h]
+    cx = (min(p.x for p in feet) + max(p.x for p in feet)) / 2
+    cy = (min(p.y for p in feet) + max(p.y for p in feet)) / 2
+    left, right = max(p.x for p in ps) - cx, cx - min(p.x for p in ps)
+    # a held club or stone makes the outer third of that arm much thicker than the empty hand's
+    def thickness(sign, reach):
+        zs = [p.z for p in ps if (p.x - cx) * sign > reach * 0.66]
+        return max(zs) - min(zs) if zs else 0.0
+    tl, tr = thickness(1, left), thickness(-1, right)
+    held = "r" if tr > tl * 1.5 else "l" if tl > tr * 1.5 else None
+    scale = REACH / (left if held != "l" else right)
+    for v in o.data.vertices:
+        v.co = Vector(((v.co.x - cx) * scale, (v.co.y - cy) * scale, gt.GROUND_Z + (v.co.z - zmin) * scale))
+    o.data.update()
+    return o, held
+
+
+def measure(o):
+    """Leg spacing, arm offset and eye centres of a generated model, in rig space (see targets())."""
+    M = o.matrix_world
+    ps = [M @ v.co for v in o.data.vertices]
+    legs = [p.x for p in ps if 50.25 < p.z < 50.55 and 0.04 < p.x < 0.6]
+    leg_x = (min(legs) + max(legs)) / 2 if legs else 0.25
+    arm = [p for p in ps if 0.7 < abs(p.x) < 0.9]
+    free = [p for p in arm if p.x > 0] or arm   # measure the creature's left arm unless it holds something
+    arm_dz = sum(p.z for p in free) / len(free) - VANILLA_ARM[1]
+    arm_dy = sum(p.y for p in free) / len(free) - VANILLA_ARM[0]
+    eyes = eye_centres(o)
+    return {"leg_x": round(leg_x, 3), "arm_dz": round(arm_dz, 3), "arm_dy": round(arm_dy, 3), "eyes": eyes}
+
+
+def eye_centres(o):
+    """Centres of the bright bluish-white eye texels on the face, per side (Plane = creature's right)."""
+    me = o.data
+    M = o.matrix_world
+    img = next(n.image for n in me.materials[0].node_tree.nodes if n.type == "TEX_IMAGE" and n.image)
+    w, h = img.size
+    pix = img.pixels[:]
+    uv = me.uv_layers.active.data
+    side = {"Plane": [], "Plane.001": []}
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            p = M @ me.vertices[me.loops[li].vertex_index].co
+            if p.y > -0.15 or abs(p.x) > 0.35 or p.z < 50.7:
+                continue
+            u, v = uv[li].uv
+            i = (min(h - 1, max(0, int(v * h))) * w + min(w - 1, max(0, int(u * w)))) * 4
+            if pix[i] + pix[i + 1] + pix[i + 2] > 2.0 and pix[i + 2] >= pix[i]:
+                side["Plane" if p.x < 0 else "Plane.001"].append(p)
+    return {k: tuple(round(sum(c[j] for c in v) / len(v), 3) for j in range(3)) for k, v in side.items() if v}
+
+
+def rigid_beyond_hand(o, side, start=0.78):
+    """Whatever the hand holds (club, stone) rides the hand bone alone: finger bones would bend it."""
+    sx = 1 if side == "l" else -1
+    hand = o.vertex_groups[f"{side}_hand"]
+    ids = [v.index for v in o.data.vertices if (o.matrix_world @ v.co).x * sx > start]
+    for g in o.vertex_groups:
+        g.remove(ids)
+    hand.add(ids, 1.0, "REPLACE")
+    return len(ids)
+
+
+def build(glb, name, work_dir, template_json, tris=3000, max_stretch=60, clean_max=12):
+    """
+    Generated model -> rigged game mesh, no hand tuning. Writes <work_dir>/<name>.glmesh and
+    tex256.png (run tools/tripo/skin.py on it for the game). Returns a report; report["ok"] is
+    False when more than `max_stretch` faces stretch in the arm-pose check. Those are left in place
+    (deleting that many tears the mesh): look at them, they usually mean the brief should change
+    (see tools/tripo/BRIEFS.md).
+    """
+    import os
+    rig = bpy.data.objects[RIG]
+    for pb in rig.pose.bones:
+        pb.matrix_basis.identity()
+    for n in (name, name + "_high"):
+        if n in bpy.data.objects:
+            bpy.data.objects.remove(bpy.data.objects[n], do_unlink=True)
+    high, held = import_auto(glb, name + "_high", "Gen_" + name)
+    low, _ = import_auto(glb, name, "Gen_" + name)
+    t = gt.decimate(low, tris)
+    fill_holes(low)
+    png = os.path.join(work_dir, "tex256.png")
+    gt.bake_texture(high, low, png, 256)
+    high.hide_set(True)
+    m = measure(high)
+    eyes = m["eyes"] if len(m["eyes"]) == 2 else {"Plane": (-0.08, -0.45, 51.37), "Plane.001": (0.08, -0.45, 51.37)}
+    rep = finish(name, m["leg_x"], m["arm_dz"], eyes, os.path.join(work_dir, name.lower() + ".json"),
+                 template_json, eye_push=0.03, arm_dy=m["arm_dy"])
+    g = bpy.data.objects["GL_" + name + "_Cube"]
+    img = bpy.data.images.load(png, check_existing=False)
+    next(x for x in g.data.materials[0].node_tree.nodes if x.type == "TEX_IMAGE").image = img
+    if held:
+        rep["held_rigid"] = rigid_beyond_hand(g, held)
+    # heat weights let the arm bones claim the shoulder caps and hump; keep the arm to its own skin
+    # and spread the shoulder bend (both proven on leafy)
+    rep["arm_tube"] = arm_tube(g, rig)
+    smooth_shoulders(g)
+    rep["stretch_faces"] = len(remove_stretch(g, rig, dry=True))
+    if rep["stretch_faces"] <= clean_max:   # a few stray faces: remove them; more would tear the mesh
+        rep["stretch"] = remove_stretch(g, rig, image=img)
+    lone = [v.index for v in g.data.vertices if not any(x.weight > 0 for x in v.groups)]
+    for vg in g.vertex_groups:
+        vg.remove(lone)
+    g.vertex_groups["spine3"].add(lone, 1.0, "REPLACE")
+    rep["counts"] = gio.export_creature("GL_" + name, template_json, os.path.join(work_dir, name.lower() + ".json"))
+    rep.update(tris=t, held=held, measure=m, ok=rep["stretch_faces"] <= max_stretch)
+    return rep
+
+
+# Other creatures whose skeleton is the greyling's, uniformly scaled (same bone names and
+# proportions; checked against gldev_export): the game mesh is the greyling-rigged one scaled about
+# the feet and written against that creature's bind poses (its export JSON as template).
+SKELETON_SCALE = {"Greyling": 1.0, "Greydwarf_Elite": 1.875}
+
+
+def export_for(coll_name, prefab, template_json, out_json):
+    import greenling_io as gio
+    from mathutils import Matrix
+    k = SKELETON_SCALE[prefab]
+    S = Matrix.Translation((0, 0, gt.GROUND_Z)) @ Matrix.Scale(k, 4) @ Matrix.Translation((0, 0, -gt.GROUND_Z))
+    objs = list(bpy.data.collections[coll_name].objects)
+    saved = {o.name: o.matrix_world.copy() for o in objs}
+    try:
+        for o in objs:
+            o.matrix_world = S @ saved[o.name]
+        bpy.context.view_layer.update()
+        return gio.export_creature(coll_name, template_json, out_json)
+    finally:
+        for o in objs:
+            o.matrix_world = saved[o.name]
+        bpy.context.view_layer.update()
