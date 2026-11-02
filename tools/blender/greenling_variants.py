@@ -149,6 +149,10 @@ def fill_holes(o, max_sides=12, image=None):
                         seen.add(e2)
                         stack.append(e2)
         verts = list({v for e in rim for v in e.verts})
+        # only clean closed rims (every vertex on exactly two rim edges): fanning anything else
+        # stacks faces onto edges that already have two (non-manifold)
+        if len(verts) != len(rim) or any(sum(1 for x in v.link_edges if x.is_boundary) != 2 for v in verts):
+            continue
         mid = sum((v.co for v in verts), verts[0].co * 0) / len(verts)
         # dome the patch outward along the surrounding surface so it isn't a sunken flat fan
         normal = sum((f.normal for e in rim for f in e.link_faces), verts[0].co * 0)
@@ -461,6 +465,149 @@ def rebake(o, rig, fit_rig, high, out_png, size=256):
     return out_png
 
 
+def separate_arms(o, arm_min=0.5, inner_x=0.12):
+    """
+    Cut each arm off the body as its own piece, the way low-poly creatures are built: generated
+    bodies weld the shoulder shell onto the upper arm, and those faces stretch into a web whenever
+    the arm moves. Faces are classed arm/body by their vertices' arm weight; every edge between the
+    two classes is split, arm-piece vertices keep only arm weights and body-piece vertices lose
+    theirs, and both openings are capped by fill_holes afterwards. The arm root ends up inside the
+    body and turns there freely. Returns the number of seam edges cut.
+    """
+    import bmesh
+    arm_ids = {g.index for g in o.vertex_groups if g.name[2:] in ("shoulder",) + ARM_CHAIN}
+    sp3 = o.vertex_groups["spine3"].index
+    M = o.matrix_world
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    deform = bm.verts.layers.deform.active
+
+    def arm_w(v):
+        return sum(w for k, w in v[deform].items() if k in arm_ids)
+
+    is_arm = {f: (sum(arm_w(v) for v in f.verts) / len(f.verts) > arm_min and abs((M @ f.calc_center_median()).x) > inner_x)
+              for f in bm.faces}
+    seam = [e for e in bm.edges if len(e.link_faces) == 2 and is_arm[e.link_faces[0]] != is_arm[e.link_faces[1]]]
+    bmesh.ops.split_edges(bm, edges=seam)
+    for v in bm.verts:
+        cls = {is_arm.get(f) for f in v.link_faces}
+        d = v[deform]
+        if cls == {True}:
+            keep = {k: w for k, w in d.items() if k in arm_ids}
+        elif cls == {False}:
+            keep = {k: w for k, w in d.items() if k not in arm_ids}
+        else:
+            continue
+        total = sum(keep.values())
+        for k in list(d.keys()):
+            del d[k]
+        if total <= 0:
+            d[sp3] = 1.0
+        else:
+            for k, w in keep.items():
+                d[k] = w / total
+    bm.to_mesh(o.data)
+    bm.free()
+    return len(seam)
+
+
+def slim_legs(o, rig, factor=0.75, bones=("leg1", "leg2")):
+    """
+    Pull leg-owned vertices toward their leg bones: generated thighs come out ~1.6x the vanilla
+    width, and hanging arms swing through them. The feet (and anything not mostly leg) stay.
+    """
+    from mathutils.geometry import intersect_point_line
+    H = {b.name: rig.matrix_world @ b.head_local for b in rig.data.bones}
+    seg = {f"{s}_leg1": (f"{s}_leg1", f"{s}_leg2") for s in "lr"}
+    seg.update({f"{s}_leg2": (f"{s}_leg2", f"{s}_foot") for s in "lr"})
+    names = {g.index: g.name for g in o.vertex_groups}
+    M = o.matrix_world
+    Mi = M.inverted()
+    moved = 0
+    for v in o.data.vertices:
+        if not v.groups:
+            continue
+        g = max(v.groups, key=lambda x: x.weight)
+        name = names[g.group]
+        if name[2:] not in bones or g.weight < 0.5:
+            continue
+        a, b = seg[name]
+        p = M @ v.co
+        _, t = intersect_point_line(p, H[a], H[b])
+        q = H[a].lerp(H[b], max(0.0, min(1.0, t)))
+        v.co = Mi @ q.lerp(p, 1.0 - (1.0 - factor) * g.weight)
+        moved += 1
+    o.data.update()
+    return moved
+
+
+def face_to_head(o, eyes, inner=0.13, outer=0.24):
+    """
+    The face (eyes, beak) rides the head bone, like the vanilla greyling's, so it turns with the
+    head and the glowing eye quads (skinned to the head) stay on it. Heat weights give the face
+    only ~10% head. Full head weight within `inner` of the face centre (between and just below the
+    eyes), fading to the existing weights at `outer`.
+    """
+    c = sum((Vector(p) for p in eyes.values()), Vector()) / len(eyes) + Vector((0, -0.02, -0.06))
+    head = o.vertex_groups["head"].index
+    M = o.matrix_world
+    n = 0
+    for v in o.data.vertices:
+        d = (M @ v.co - c).length
+        if d >= outer:
+            continue
+        t = 1.0 if d <= inner else (outer - d) / (outer - inner)
+        old = {g.group: g.weight for g in v.groups}
+        for k, w in old.items():
+            o.vertex_groups[k].add([v.index], w * (1 - t), "REPLACE")
+        o.vertex_groups[head].add([v.index], old.get(head, 0.0) * (1 - t) + t, "REPLACE")
+        n += 1
+    return n
+
+
+def drop_fragments(o, min_verts=25):
+    """Delete small loose pieces (left floating by cuts)."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    seen, drop = set(), []
+    for v in bm.verts:
+        if v in seen:
+            continue
+        comp, stack = [], [v]
+        seen.add(v)
+        while stack:
+            x = stack.pop()
+            comp.append(x)
+            for e in x.link_edges:
+                y = e.other_vert(x)
+                if y not in seen:
+                    seen.add(y)
+                    stack.append(y)
+        if len(comp) < min_verts:
+            drop += comp
+    bmesh.ops.delete(bm, geom=drop, context="VERTS")
+    bm.to_mesh(o.data)
+    bm.free()
+    return len(drop)
+
+
+def fix_winding(o):
+    """
+    Make face winding consistent across each connected piece, pointing outward (cuts, fills and
+    decimation leave some faces flipped; the game culls back faces, so those show as holes).
+    """
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    before = len(bm.faces)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bm.to_mesh(o.data)
+    bm.free()
+    o.data.update()
+    return before
+
+
 def own_side(o, margin=0.04):
     """
     Both shoulder bones start at the same point, so heat weights hand some left-shoulder vertices to
@@ -532,14 +679,14 @@ def finish(name, leg_x, arm_dz, eyes, out_json, template_json, eye_push=0.012, a
 
 # ---------------------------------------------------------------- automatic pipeline
 
-REACH = 1.37         # fingertip x of the free (empty) hand, in rig space; the first models' scale
+HEIGHT = 1.6         # standing height in rig space; the vanilla greyling mesh is 1.56 (brute: x1.875)
 VANILLA_ARM = (-0.07, 51.21)   # vanilla arm bone (y, z) around the forearm
 
 
 def import_auto(glb, name, coll_name):
     """
-    Import a generated model scaled so the free hand reaches REACH and centred on its feet. Tripo
-    normalises each model to its bounding box, so a club or a staff would otherwise shrink the body.
+    Import a generated model scaled to the vanilla height (HEIGHT) and centred on its feet. Tripo
+    normalises each model to its bounding box, so it has to be rescaled anyway.
     Returns (object, held_side): held_side is "r"/"l" when one hand holds something (its outer
     arm is much thicker than the other's), else None.
     """
@@ -557,7 +704,7 @@ def import_auto(glb, name, coll_name):
         return max(zs) - min(zs) if zs else 0.0
     tl, tr = thickness(1, left), thickness(-1, right)
     held = "r" if tr > tl * 1.5 else "l" if tl > tr * 1.5 else None
-    scale = REACH / (left if held != "l" else right)
+    scale = HEIGHT / h
     for v in o.data.vertices:
         v.co = Vector(((v.co.x - cx) * scale, (v.co.y - cy) * scale, gt.GROUND_Z + (v.co.z - zmin) * scale))
     o.data.update()
@@ -641,10 +788,22 @@ def build(glb, name, work_dir, template_json, tris=3000, max_stretch=60, clean_m
     next(x for x in g.data.materials[0].node_tree.nodes if x.type == "TEX_IMAGE").image = img
     if held:
         rep["held_rigid"] = rigid_beyond_hand(g, held)
-    # heat weights let the arm bones claim the shoulder caps and hump; keep the arm to its own skin
-    # and spread the shoulder bend (both proven on leafy)
+    # heat weights let the arm bones claim the shoulder caps and hump: keep the arm to its own skin,
+    # then cut it free of the body (no web between shell and arm), cap both openings, slim the legs
     rep["arm_tube"] = arm_tube(g, rig)
-    smooth_shoulders(g)
+    rep["arm_seam"] = separate_arms(g)
+    rep["fragments"] = drop_fragments(g)
+    rep["legs_slimmed"] = slim_legs(g, rig)
+    rep["face"] = face_to_head(g, eyes)
+    fill_holes(g, max_sides=64, image=img)
+    fix_winding(g)
+    # caps and cuts get real texture: new UVs baked from the generated model
+    png_final = os.path.join(work_dir, "tex256_final.png")
+    rebake(g, rig, bpy.data.objects[RIG + "_fit"], high, png_final)
+    high.hide_set(True)
+    img = bpy.data.images.load(png_final, check_existing=False)
+    next(x for x in g.data.materials[0].node_tree.nodes if x.type == "TEX_IMAGE").image = img
+    rep["texture"] = png_final
     rep["stretch_faces"] = len(remove_stretch(g, rig, dry=True))
     if rep["stretch_faces"] <= clean_max:   # a few stray faces: remove them; more would tear the mesh
         rep["stretch"] = remove_stretch(g, rig, image=img)

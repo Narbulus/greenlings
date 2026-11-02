@@ -60,7 +60,9 @@ def decimate(o, tris):
     if cur > tris:
         bm = bmesh.new()
         bm.from_mesh(o.data)
-        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)  # weld seams so collapse keeps the surface closed
+        # weld the UV-seam duplicates (exactly coincident) so collapse keeps the surface closed; a looser
+        # distance also merges separate surfaces that touch, which leaves non-manifold edges
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-7)
         bm.to_mesh(o.data)
         bm.free()
         cur = sum(len(p.vertices) - 2 for p in o.data.polygons)
@@ -92,7 +94,7 @@ def decimate_split(o, body_tris, detail_tris, is_detail):
 
     bm = bmesh.new()
     bm.from_mesh(o.data)
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-7)  # seam duplicates only (see decimate)
     bm.to_mesh(o.data)
     bm.free()
     bpy.context.view_layer.objects.active = o
