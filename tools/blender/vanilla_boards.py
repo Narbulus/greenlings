@@ -26,7 +26,7 @@ PREFABS = {
     "Greydwarf_Elite": ("texture_greydwarf_elite.png", 0.0, 0.0, (1.0, 0.1, 0.2)),
     "Greydwarf_Shaman": ("texture_greydwarf_shaman.png", 0.0, 0.0, (0.4, 1.0, 0.3)),
 }
-BG = (0.141, 0.141, 0.141)    # the briefs' background, #242424
+BG = (0.92, 0.92, 0.92)    # light grey board background
 VIEWS = (("front", 0), ("right", 90), ("left", -90), ("back", 180))   # camera yaw around the creature
 
 
