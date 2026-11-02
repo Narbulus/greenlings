@@ -1,0 +1,21 @@
+# Shamans heal hurt tamed creatures nearby: greenlings, and your animals too.
+!include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_cfg greenlings Needs RestChance 0
+gldev_place Greydwarf_Shaman 0 5
+gldev_tame
+gldev_bond 100
+gldev_place Greyling 3 7
+gldev_tame
+gldev_bond 100
+!wait 2
+gldev_hurt Greyling 0.3
+!waitfor GLEVT\] mischief .*kind=heal patient=Greyling 6
+!waitfor GLEVT\] heal .*patient=Greyling 20
+gldev_place Boar -3 7
+gldev_tamelast Boar
+!wait 1
+gldev_hurt Boar 0.2
+!waitfor GLEVT\] heal .*patient=Boar 30

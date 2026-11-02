@@ -9,7 +9,7 @@ gldev_give RawMeat 2
 gldev_use piece_cookingstation RawMeat
 gldev_use piece_cookingstation RawMeat
 gldev_move 0 -5
-!include _watching.txt
+!include _watching_dwarf.txt
 # cook (vanilla raw meat takes ~25s); keep the greenling's attention while we wait
 gldev_cfg greenlings Teaching AttentionSpan 120
 !wait 30

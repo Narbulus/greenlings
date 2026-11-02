@@ -4,20 +4,16 @@
 gldev_place piece_chest_wood -3 4
 gldev_place smelter 4 6
 gldev_fill piece_chest_wood CopperOre 4
-spawn Greyling 1
+# machines are greydwarf work
+spawn Greydwarf 1
 !wait 1
 gldev_tame
+gldev_bond 100
 !wait 1.5
 
-# not curious enough yet (starts at 40, needs 50): a pat is refused
-gldev_pat
-!waitfor GLEVT\] pat_refused 3
-
-# a coin raises curiosity, then the pat starts a lesson
+# a coin and it watches you
 gldev_give Coins 5
 gldev_useitem Coins
-!waitfor GLEVT\] curiosity .*reason=coin 3
-gldev_pat
 !waitfor GLEVT\] state .*to=Watching 3
 
 # demonstrate: take ore from the chest, put it in the smelter
@@ -36,6 +32,6 @@ gldev_addore smelter CopperOre
 !waitfor GLEVT] take .*item=CopperOre 30
 !waitfor GLEVT] deposit .*item=CopperOre 30
 !waitfor GLEVT] deposit .*item=CopperOre 30
-!waitfor GLEVT] wait .*reason=source_empty 40
+!waitfor GLEVT] wait .*reason=no_work 40
 gl_dump
 !screenshot teach-smelter

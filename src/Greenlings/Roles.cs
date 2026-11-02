@@ -3,17 +3,18 @@ using UnityEngine;
 
 namespace Greenlings
 {
-    public enum Role { Greyling, Greydwarf, Brute }
+    public enum Role { Greyling, Greydwarf, Brute, Shaman }
 
     /// <summary>
     /// What each kind of greenling can learn.
     ///   Greyling:  light chores: chests, loose items, foraging, beehives, keeping fires lit.
     ///   Greydwarf: + operating machines (smelters, kilns, cooking, fermenters), gathering stones/flint, breaking bushes.
     ///   Brute:     only whacks: splits logs, smashes rocks and stumps, leaves the pieces. Never hauls, never fells standing trees.
+    ///   Shaman:    greyling chores + planting crops (nobody else plants). Also heals and soothes strays (see Shamans).
     /// </summary>
     internal static class Roles
     {
-        public static readonly string[] TameablePrefabs = { "Greyling", "Greydwarf", "Greydwarf_Elite" };
+        public static readonly string[] TameablePrefabs = { "Greyling", "Greydwarf", "Greydwarf_Elite", "Greydwarf_Shaman" };
 
         public static Role Of(GameObject go)
         {
@@ -21,11 +22,12 @@ namespace Greenlings
             {
                 case "Greydwarf": return Role.Greydwarf;
                 case "Greydwarf_Elite": return Role.Brute;
+                case "Greydwarf_Shaman": return Role.Shaman;
                 default: return Role.Greyling;
             }
         }
 
-        public static string Name(Role r) => r == Role.Brute ? "brute" : r == Role.Greydwarf ? "greydwarf" : "greyling";
+        public static string Name(Role r) => r == Role.Brute ? "brute" : r == Role.Greydwarf ? "greydwarf" : r == Role.Shaman ? "shaman" : "greyling";
 
         public static int CarryPerTrip(Role r) => Plugin.CarryMax.Value;
 
@@ -40,9 +42,11 @@ namespace Greenlings
             if (r == Role.Brute && !t.IsWhack) { why = "brutes only smash things; let the little ones carry"; return false; }
             if (r != Role.Brute && t.IsWhack) { why = "too small to smash that"; return false; }
             if (r == Role.Brute) return true;
-            if (r == Role.Greyling)
+            if (t.Sink.Kind == EndpointKind.Field) { why = r == Role.Shaman ? null : "planting is shaman work"; return r == Role.Shaman; }
+            if (r == Role.Greyling || r == Role.Shaman)
             {
-                if (t.Sink.Kind != EndpointKind.Container && t.Sink.Kind != EndpointKind.FireFuel) { why = "machines are greydwarf work"; return false; }
+                if (t.Sink.Kind != EndpointKind.Container && t.Sink.Kind != EndpointKind.FireFuel && t.Sink.Kind != EndpointKind.GroundDrop
+                    && t.Sink.Kind != EndpointKind.ToPlayer) { why = "machines are greydwarf work"; return false; }
                 if (t.Source.Kind == EndpointKind.Extract && !(t.Source.Get<Beehive>() || t.Source.Get<SapCollector>())) { why = "machines are greydwarf work"; return false; }
                 if (t.Source.Kind == EndpointKind.PickableArea && IsRockyPickable(t.Source.Prefab)) { why = "rocks and flint are greydwarf work"; return false; }
                 if (t.Source.Kind == EndpointKind.BreakArea) { why = "breaking things is greydwarf work"; return false; }

@@ -1,0 +1,8 @@
+# Visual check (not in the suite): let the shaman fill the strip at noon, then look down on it.
+!include shaman-plant.txt
+tod 0.5
+!waitfor GLEVT\] (field_full|wait .*reason=no_work) 180
+gldev_cam piece_chest_wood 3 180 9
+!wait 1
+!screenshot shaman_field_top
+gldev_cam off

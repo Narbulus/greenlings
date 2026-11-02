@@ -1,0 +1,43 @@
+# Two demonstrations make a two-step job: meat onto the cooking station, cooked meat back into
+# the chest. Any meat the station takes will do, not just the one shown.
+!include _setup.txt
+gldev_place piece_chest_wood -3 4
+gldev_place fire_pit 3 6
+gldev_place piece_cookingstation 3 6
+gldev_fill piece_chest_wood NeckTail 2
+gldev_give Wood 3
+gldev_use fire_pit Wood
+gldev_give RawMeat 2
+gldev_move 0 -5
+# cooking is greydwarf work
+gldev_place Greydwarf 0 3
+!wait 1
+gldev_tame
+gldev_bond 100
+!wait 1.5
+gldev_give Coins 5
+gldev_useitem Coins
+!waitfor GLEVT\] state .*to=Watching 3
+# something to collect later
+gldev_use piece_cookingstation RawMeat
+# step 1: the chest -> the cooking station
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take NeckTail 1
+gldev_close
+gldev_use piece_cookingstation NeckTail
+!waitfor GLEVT\] learned .*NeckTail: Container:piece_chest_wood#\d+ -> CookAdd:piece_cookingstation.* steps=1 3
+# step 2 (no new coin: it is still paying attention): cooked meat -> the chest
+!wait 26
+gldev_interact piece_cookingstation
+!wait 1
+gldev_pickup CookedMeat
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_put CookedMeat 1
+gldev_close
+!waitfor GLEVT\] learned .*CookedMeat: Extract:piece_cookingstation#\d+ -> Container:piece_chest_wood.* steps=2 3
+!waitfor GLEVT\] deposit .*item=NeckTail to=CookAdd 60
+!waitfor GLEVT\] harvest .*from=piece_cookingstation 90
+!waitfor GLEVT\] deposit .*item=(Cooked\w+|\w+Grilled) to=Container 60
+gl_dump 15

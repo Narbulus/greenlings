@@ -1,0 +1,17 @@
+# Show it one torch and it keeps every torch around topped up (lowest first).
+!include _setup.txt
+gldev_place piece_chest_wood -3 4
+gldev_place piece_groundtorch_wood 3 6
+gldev_place piece_groundtorch_wood 7 2
+gldev_fill piece_chest_wood Resin 20
+!include _watching.txt
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take Resin 1
+gldev_close
+gldev_use piece_groundtorch_wood Resin
+!waitfor GLEVT\] learned .*Resin: Container:piece_chest_wood#\d+ -> FireFuel:piece_groundtorch_wood 3
+!waitfor GLEVT\] deposit .*item=Resin to=FireFuel:piece_groundtorch_wood#\d+ 40
+!waitfor GLEVT\] deposit .*item=Resin to=FireFuel:piece_groundtorch_wood#\d+ 60
+!waitfor GLEVT\] deposit .*item=Resin to=FireFuel:piece_groundtorch_wood#\d+ 60
+gl_dump

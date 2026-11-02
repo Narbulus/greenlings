@@ -1,0 +1,45 @@
+# Only shamans plant. Show one a couple of carrots on a tilled strip and it fills the rest in neat rows,
+# matching your spacing; a greyling watching the same lesson refuses it. It needs a cultivator, and fetches
+# one from the chest once there is one.
+!include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_cfg greenlings Needs RestChance 0
+gldev_place piece_chest_wood -3 3
+gldev_fill piece_chest_wood CarrotSeeds 30
+gldev_give Coins 5
+gldev_place Greyling 3 2
+gldev_tame
+gldev_bond 100
+!wait 1.5
+gldev_useitem Coins
+gldev_place Greydwarf_Shaman 2 3
+gldev_tame
+gldev_bond 100
+!wait 1.5
+gldev_useitem Coins
+!waitfor GLEVT\] state .*to=Watching 3
+gldev_open piece_chest_wood
+gldev_take CarrotSeeds 2
+gldev_close
+# (opening the chest walked the player over to it: till the strip from here)
+gldev_cultivate 0 6 3 6
+!wait 1
+gldev_plant sapling_carrot 0 4
+gldev_plant sapling_carrot 0 5
+!waitfor GLEVT\] lesson_refused .*role=greyling reason="planting is shaman work" 5
+!waitfor GLEVT\] learned .*Field:sapling_carrot 5
+!waitfor GLEVT\] field crop=sapling_carrot spacing=1.00 .*from=plants plants=2 20
+!waitfor GLEVT\] wait .*reason=needs_cultivator 10
+gldev_fill piece_chest_wood Cultivator 1
+!waitfor GLEVT\] mischief .*kind=fetch_tool tool=Cultivator 15
+!waitfor GLEVT\] tool .*item=Cultivator from=Container:piece_chest_wood 20
+!waitfor GLEVT\] take .*item=CarrotSeeds n=5 20
+!waitfor GLEVT\] deposit .*item=CarrotSeeds to=Field 30
+!waitfor GLEVT\] deposit .*item=CarrotSeeds to=Field 15
+!waitfor GLEVT\] deposit .*item=CarrotSeeds to=Field 15
+!waitfor GLEVT\] deposit .*item=CarrotSeeds to=Field 15
+!waitfor GLEVT\] deposit .*item=CarrotSeeds to=Field 15
+!waitfor GLEVT\] deposit .*item=CarrotSeeds to=Field 60
+!screenshot shaman_field

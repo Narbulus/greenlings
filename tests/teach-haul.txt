@@ -7,10 +7,10 @@ gldev_fill piece_chest_wood Wood 8
 spawn Greyling 1
 !wait 1
 gldev_tame
+gldev_bond 100
 !wait 1.5
 gldev_give Coins 5
 gldev_useitem Coins
-gldev_pat
 !waitfor GLEVT\] state .*to=Watching 3
 
 gldev_open piece_chest_wood
@@ -31,5 +31,5 @@ gldev_close
 !waitfor GLEVT\] deposit .*carrying=0 40
 !waitfor GLEVT\] take .*item=Wood n=1 30
 !waitfor GLEVT\] deposit .*carrying=0 40
-!waitfor GLEVT\] wait .*reason=source_(empty|busy_or_empty) 30
+!waitfor GLEVT\] wait .*reason=(source_empty|source_busy_or_empty|no_work) 30
 gl_dump

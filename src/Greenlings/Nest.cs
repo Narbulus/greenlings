@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using UnityEngine;
@@ -10,6 +11,7 @@ namespace Greenlings
     /// The prefab is created at runtime and registered with ZNetScene so nests save and load
     /// like any other piece.
     /// </summary>
+    [HarmonyPatch]
     internal static class Nest
     {
         public const string PrefabName = "piece_greenling_nest";
@@ -97,12 +99,52 @@ namespace Greenlings
         private static ItemDrop Item(string name) => ObjectDB.instance?.GetItemPrefab(name)?.GetComponent<ItemDrop>()
                                                      ?? ZNetScene.instance.GetPrefab(name)?.GetComponent<ItemDrop>();
 
-        /// <summary>The nearest nest within range of a point, or null.</summary>
-        public static Piece Near(Vector3 at, float range) =>
+        /// <summary>Nests within range of a point, nearest first.</summary>
+        public static IEnumerable<Piece> AllNear(Vector3 at, float range) =>
             Object.FindObjectsByType<Piece>(FindObjectsSortMode.None)
-                .Where(p => p && Utils.GetPrefabName(p.gameObject) == PrefabName && Vector3.Distance(p.transform.position, at) < range)
-                .OrderBy(p => Vector3.Distance(p.transform.position, at))
-                .FirstOrDefault();
+                .Where(p => p && p.m_nview && p.m_nview.IsValid() && Utils.GetPrefabName(p.gameObject) == PrefabName
+                            && Vector3.Distance(p.transform.position, at) < range)
+                .OrderBy(p => Vector3.Distance(p.transform.position, at));
+
+        public static string Id(Piece nest) => nest && nest.m_nview && nest.m_nview.IsValid() ? nest.m_nview.GetZDO().m_uid.ID.ToString() : "?";
+
+        /// <summary>
+        /// Beds are shared out, not owned: there is room for this greenling if the nests around it
+        /// hold enough for everyone ahead of it (a fixed pecking order, so every client agrees).
+        /// </summary>
+        public static bool HasRoom(Greenling g)
+        {
+            var range = Plugin.NestRange.Value;
+            var beds = AllNear(g.transform.position, range).Count() * Mathf.Max(1, Plugin.NestCapacity.Value);
+            if (beds == 0) return false;
+            var me = g.Zdo?.m_uid ?? ZDOID.None;
+            var ahead = Greenling.All.Count(o => o && o != g && o.IsGreenling && o.Zdo != null
+                                               && Vector3.Distance(o.transform.position, g.transform.position) < range
+                                               && Order(o.Zdo.m_uid) < Order(me));
+            return ahead < beds;
+        }
+
+        private static long Order(ZDOID id) => id.UserID * 1000003L + id.ID;
+
+        /// <summary>Which nest to go to now: the nearest one that isn't full yet.</summary>
+        public static Piece Assign(Greenling g)
+        {
+            var cap = Mathf.Max(1, Plugin.NestCapacity.Value);
+            foreach (var nest in AllNear(g.transform.position, Plugin.NestRange.Value))
+            {
+                var inUse = Greenling.All.Count(o => o && o != g && o.Brain.CurrentPrank is Prank p && (p.Kind == "sleep" || p.Kind == "rest") && p.NestPiece == nest);
+                if (inUse < cap) return nest;
+            }
+            return null;
+        }
+
+        /// <summary>Plants already growing around a nest (theirs or not).</summary>
+        public static int Decorations(Piece nest)
+        {
+            var plants = Plugin.NestPlants.Value.Split(',').Select(s => s.Trim()).ToList();
+            return Object.FindObjectsByType<Pickable>(FindObjectsSortMode.None)
+                .Count(p => p && plants.Contains(Utils.GetPrefabName(p.gameObject)) && Vector3.Distance(p.transform.position, nest.transform.position) < 3.5f);
+        }
 
         [HarmonyPatch(typeof(ZNetScene), "Awake"), HarmonyPostfix, HarmonyPriority(Priority.Low)]
         private static void OnScene()

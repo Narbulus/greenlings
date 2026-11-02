@@ -1,0 +1,19 @@
+# Greenlings leave animals alone (they used to attack boars), and greylings run from monsters.
+!include _setup.txt
+!include _tamed.txt
+spawn Boar 1
+!wait 6
+gl_dump 20
+!waitfor GLDUMP\] \{"type":"greenling".*"target":"" 2
+# (a boar that comes at it is still scary: wait for it to settle before the real test)
+gldev_remove Boar
+!wait 9
+# a wild greydwarf turns up: the greenling is frightened and runs to the player (or panics)
+gldev_move 0 -3
+spawn Greydwarf 1
+!waitfor GLEVT\] scared .*to=(player|panic|brute) .*threat=Greydwarf 8
+killenemies
+!wait 1
+# danger gone: a pat calms it (or it calms down by itself)
+gldev_pat
+!waitfor GLEVT\] calm .*reason=(pat|timeout) 15

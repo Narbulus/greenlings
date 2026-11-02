@@ -23,6 +23,12 @@ namespace Greenlings
         BreakArea = 10,    // smash things of one category around a spot (bushes, logs, rocks); Prefab = category
         // sink for brute jobs
         Leave = 11,        // just leave the pieces where they fall (someone else hauls them)
+        // sink: put it on the ground here (a feeding spot), keeping a small pile
+        GroundDrop = 12,
+        // sink: bring it to a player (a curious greenling helping you forage); Id = the player
+        ToPlayer = 13,
+        // sink: plant it (seeds) in a field, on a neat grid (shamans only); Prefab = the crop piece
+        Field = 14,
     }
 
     public class Endpoint
@@ -37,25 +43,35 @@ namespace Greenlings
 
         public static Endpoint Ground(Vector3 pos) => new Endpoint { Kind = EndpointKind.Ground, Pos = pos };
 
+        public static Endpoint GroundDrop(Vector3 pos) => new Endpoint { Kind = EndpointKind.GroundDrop, Pos = pos };
+
+        public static Endpoint ToPlayer(Player p) => new Endpoint { Kind = EndpointKind.ToPlayer, Id = p.GetZDOID(), Pos = p.transform.position };
+
+        public Player Player => Kind == EndpointKind.ToPlayer ? ZNetScene.instance.FindInstance(Id)?.GetComponent<Player>() : null;
+
         public static Endpoint Pickables(Vector3 pos, string prefab) => new Endpoint { Kind = EndpointKind.PickableArea, Pos = pos, Prefab = prefab };
 
         public static Endpoint BreakArea(Vector3 pos, string category) => new Endpoint { Kind = EndpointKind.BreakArea, Pos = pos, Prefab = category };
 
-        public bool IsStation => Kind != EndpointKind.Ground && Kind != EndpointKind.PickableArea && Kind != EndpointKind.BreakArea && Kind != EndpointKind.Leave;
+        public bool IsStation => Kind != EndpointKind.Ground && Kind != EndpointKind.PickableArea && Kind != EndpointKind.BreakArea
+                                 && Kind != EndpointKind.Leave && Kind != EndpointKind.GroundDrop && Kind != EndpointKind.ToPlayer
+                                 && Kind != EndpointKind.Field;
 
         public static Endpoint LeaveIt(Vector3 pos) => new Endpoint { Kind = EndpointKind.Leave, Pos = pos };
 
         /// <summary>How far from <see cref="Pos"/> loose items count as belonging to this source.</summary>
         public float CollectRadius => Kind switch
         {
-            EndpointKind.Ground => 6f,
-            EndpointKind.PickableArea => 12f,
+            EndpointKind.Ground => 10f,
+            EndpointKind.PickableArea => Plugin.WorkRadius.Value,
+            EndpointKind.Extract => Plugin.WorkRadius.Value, // stray honey lying about gets put away too
             EndpointKind.BreakArea => 12f,
             _ => 3f,
         };
 
         public bool SameAs(Endpoint o) =>
-            o != null && Kind == o.Kind && (IsStation ? Id == o.Id : Vector3.Distance(Pos, o.Pos) < CollectRadius);
+            o != null && Kind == o.Kind && (IsStation ? Id == o.Id || (Prefab == o.Prefab && Vector3.Distance(Pos, o.Pos) < 1f)
+                                                      : Vector3.Distance(Pos, o.Pos) < Mathf.Min(CollectRadius, 6f));
 
         private GameObject _cached;
 
@@ -97,13 +113,14 @@ namespace Greenlings
 
         public Vector3 CurrentPos()
         {
+            if (Kind == EndpointKind.ToPlayer && Player is Player p) return Pos = p.transform.position;
             var go = Resolve();
             if (go) Pos = go.transform.position;
             return Pos;
         }
 
         /// <summary>False only when the area is loaded and the station is really gone.</summary>
-        public bool Exists() => !IsStation || Resolve() != null || !AreaLoaded;
+        public bool Exists() => Kind == EndpointKind.ToPlayer ? Player != null : !IsStation || Resolve() != null || !AreaLoaded;
 
         public override string ToString() =>
             IsStation ? $"{Kind}:{(Resolve() ? Utils.GetPrefabName(Resolve()) : Prefab)}#{Id.ID}"
@@ -122,6 +139,9 @@ namespace Greenlings
                 Prefab = p.Length > 6 ? p[6] : "",
             };
         }
+
+        /// <summary>A sibling station: same kind of endpoint on another object.</summary>
+        public static Endpoint Like(Endpoint e, Component c) => For(e.Kind, c);
 
         private static string F(float f) => f.ToString(CultureInfo.InvariantCulture);
         private static float P(string s) => float.Parse(s, CultureInfo.InvariantCulture);
@@ -142,14 +162,34 @@ namespace Greenlings
             return new LaborTask { Item = p[0], Source = Endpoint.Parse(p[1]), Sink = Endpoint.Parse(p[2]) };
         }
 
+        /// <summary>A job is one or more tasks, one per line.</summary>
+        public static List<LaborTask> ParseJob(string s) =>
+            string.IsNullOrEmpty(s) ? new List<LaborTask>() : s.Split('\n').Where(l => l.Length > 0).Select(Parse).ToList();
+
+        public static string SerializeJob(IEnumerable<LaborTask> job) => string.Join("\n", job.Select(t => t.Serialize()));
+
         public override string ToString() => IsWhack ? $"smash: {Source}" : $"{Item}: {Source} -> {Sink}";
 
         public bool IsWhack => Sink.Kind == EndpointKind.Leave;
 
+        /// <summary>
+        /// Showing a step again with the same place to take from (or the same place to put into)
+        /// corrects that step instead of adding another.
+        /// </summary>
+        public bool Corrects(LaborTask o) => o != null && (Source.SameAs(o.Source) || Sink.SameAs(o.Sink));
+
+        /// <summary>Stations that take several kinds of input: any of them will do, not just the one shown.</summary>
+        public bool AnyAcceptedItem => Sink.Kind == EndpointKind.CookAdd || Sink.Kind == EndpointKind.SmelterOre || Sink.Kind == EndpointKind.FermenterAdd;
+
         public string Describe() => IsWhack ? $"smashing {Source.Prefab}s" : $"{Items.DisplayName(Item)} to {Station(Sink)}";
+
+        public static string Describe(List<LaborTask> job) => string.Join(", then ", job.Select(t => t.Describe()));
 
         private static string Station(Endpoint e)
         {
+            if (e.Kind == EndpointKind.GroundDrop) return "a feeding spot";
+            if (e.Kind == EndpointKind.ToPlayer) return "you";
+            if (e.Kind == EndpointKind.Field) return "the field";
             var go = e.Resolve();
             if (!go) return "somewhere";
             var piece = go.GetComponent<Piece>();
@@ -160,36 +200,60 @@ namespace Greenlings
     /// <summary>Source adapters: what is available, and how to get it into a greenling's hands.</summary>
     internal static class Sources
     {
-        /// <summary>Loose drops of the item near the source, nearest first.</summary>
+        public static IEnumerable<ItemDrop> DropsNear(Vector3 at, float radius) =>
+            Physics.OverlapSphere(at, radius, LayerMask.GetMask("item"))
+                .Select(c => c.attachedRigidbody ? c.attachedRigidbody.GetComponent<ItemDrop>() : null)
+                .Where(d => d && d.GetComponent<ZNetView>() && d.GetComponent<ZNetView>().IsValid())
+                .Distinct();
+
+        /// <summary>Loose drops of the item near the source, nearest first (not ones in someone's feeding pile).</summary>
         public static ItemDrop FindDrop(Endpoint src, string item, Vector3 from)
         {
-            ItemDrop best = null;
-            var bestDist = float.MaxValue;
-            foreach (var c in Physics.OverlapSphere(src.CurrentPos(), src.CollectRadius, LayerMask.GetMask("item")))
-            {
-                var drop = c.attachedRigidbody ? c.attachedRigidbody.GetComponent<ItemDrop>() : null;
-                if (!drop || Utils.GetPrefabName(drop.gameObject) != item || !drop.GetComponent<ZNetView>().IsValid()) continue;
-                var d = Vector3.Distance(drop.transform.position, from);
-                if (d < bestDist) { best = drop; bestDist = d; }
-            }
-            return best;
-        }
-
-        /// <summary>Is there anything to fetch right now (stock, ready produce, or loose drops)?</summary>
-        public static bool HasWork(Endpoint src, string item, Vector3 from)
-        {
-            if (src.Kind == EndpointKind.Container)
-            {
-                var c = src.Get<Container>();
-                return c && c.GetInventory().CountItems(Items.SharedName(item)) > 0;
-            }
-            if (src.Kind == EndpointKind.BreakArea) return FindDrop(src, item, from) || Breakables.Nearest(src, from);
-            return FindDrop(src, item, from) || ProducerReady(src, item, from) != null;
+            if (src.Kind == EndpointKind.Container) return null;
+            return DropsNear(src.CurrentPos(), src.CollectRadius)
+                .Where(d => Matches(src, item, Utils.GetPrefabName(d.gameObject)) && !Sinks.InFeedingPile(d))
+                .OrderBy(d => Vector3.Distance(d.transform.position, from)).FirstOrDefault();
         }
 
         /// <summary>
-        /// For producer sources: the object to "harvest" now (station or a specific pickable),
-        /// or null if nothing is ready.
+        /// Whether a loose item counts for this source: the item shown, or for a cooking station or
+        /// fermenter anything it makes (collect the grilled neck tails too, and the burnt bits).
+        /// </summary>
+        public static bool Matches(Endpoint src, string taught, string drop)
+        {
+            if (drop == taught) return true;
+            if (src.Kind != EndpointKind.Extract) return false;
+            var go = src.Resolve();
+            if (!go) return false;
+            if (go.GetComponent<CookingStation>() is CookingStation k)
+                return k.m_conversion.Any(c => c.m_to && c.m_to.name == drop) || (k.m_overCookedItem && k.m_overCookedItem.name == drop);
+            if (go.GetComponent<Fermenter>() is Fermenter f) return f.m_conversion.Any(c => c.m_to && c.m_to.name == drop);
+            return false;
+        }
+
+        /// <summary>Is there anything to fetch for this task right now (stock, ready produce, loose drops or things to smash)?</summary>
+        public static bool HasWork(LaborTask t, Vector3 from)
+        {
+            var src = t.Source;
+            if (src.Kind == EndpointKind.Container) return ContainerItem(t) != null;
+            if (src.Kind == EndpointKind.BreakArea) return FindDrop(src, t.Item, from) || Breakables.Nearest(src, from);
+            return FindDrop(src, t.Item, from) || ProducerReady(src, t.Item, from) != null;
+        }
+
+        /// <summary>Which item to take out of the source chest: the one shown, or anything else the station takes.</summary>
+        public static string ContainerItem(LaborTask t)
+        {
+            var c = t.Source.Get<Container>();
+            if (!c) return null;
+            var inv = c.GetInventory();
+            if (inv.CountItems(Items.SharedName(t.Item)) > 0) return t.Item;
+            if (!t.AnyAcceptedItem) return null;
+            return inv.GetAllItems().Select(Items.PrefabOf).FirstOrDefault(p => p != null && Sinks.Accepts(t.Sink, p));
+        }
+
+        /// <summary>
+        /// For producer sources: the object to "harvest" now (a station of the same kind nearby, or a
+        /// specific pickable), or null if nothing is ready.
         /// </summary>
         public static GameObject ProducerReady(Endpoint src, string item, Vector3 from)
         {
@@ -197,13 +261,14 @@ namespace Greenlings
             {
                 case EndpointKind.Extract:
                 {
-                    var go = src.Resolve();
-                    if (!go) return null;
-                    if (go.GetComponent<Beehive>() is Beehive hive) return hive.GetHoneyLevel() > 0 ? go : null;
-                    if (go.GetComponent<SapCollector>() is SapCollector sap) return sap.GetLevel() > 0 ? go : null;
-                    if (go.GetComponent<CookingStation>() is CookingStation cook) return cook.HaveDoneItem() ? go : null;
-                    if (go.GetComponent<Fermenter>() is Fermenter ferm) return ferm.GetStatus() == Fermenter.Status.Ready ? go : null;
-                    return null;
+                    var prefab = src.Prefab.Length > 0 ? src.Prefab : (src.Resolve() ? Utils.GetPrefabName(src.Resolve()) : "");
+                    return Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None)
+                        .Where(n => n && n.IsValid() && Utils.GetPrefabName(n.gameObject) == prefab
+                                    && Vector3.Distance(n.transform.position, src.Pos) < Plugin.WorkRadius.Value)
+                        .Select(n => n.gameObject)
+                        .Where(Ready)
+                        .OrderBy(go => Vector3.Distance(go.transform.position, from))
+                        .FirstOrDefault();
                 }
                 case EndpointKind.PickableArea:
                     return Object.FindObjectsByType<Pickable>(FindObjectsSortMode.None)
@@ -216,6 +281,15 @@ namespace Greenlings
             }
         }
 
+        private static bool Ready(GameObject go)
+        {
+            if (go.GetComponent<Beehive>() is Beehive hive) return hive.GetHoneyLevel() > 0;
+            if (go.GetComponent<SapCollector>() is SapCollector sap) return sap.GetLevel() > 0;
+            if (go.GetComponent<CookingStation>() is CookingStation cook) return cook.HaveDoneItem();
+            if (go.GetComponent<Fermenter>() is Fermenter ferm) return ferm.GetStatus() == Fermenter.Status.Ready;
+            return false;
+        }
+
         /// <summary>Make a producer spit out its items (they land as drops, like for players).</summary>
         public static void Harvest(GameObject producer, Vector3 greenlingPos)
         {
@@ -226,11 +300,11 @@ namespace Greenlings
             else if (producer.GetComponent<Pickable>()) nview.InvokeRPC("RPC_Pick", 0);
         }
 
-        /// <summary>Take up to max from a container. Returns the count taken (0 if busy/empty).</summary>
+        /// <summary>Take up to max of an item from a container. Returns the count taken (0 if busy/empty).</summary>
         public static int TakeFromContainer(Endpoint src, string item, int max)
         {
             var c = src.Get<Container>();
-            if (!c || c.IsInUse()) return 0;
+            if (!c || c.IsInUse() || item == null) return 0;
             var nview = c.GetComponent<ZNetView>();
             if (!nview.IsOwner()) nview.ClaimOwnership();
             var inv = c.GetInventory();
@@ -275,7 +349,8 @@ namespace Greenlings
     {
         public static bool Accepts(Endpoint sink, string item)
         {
-            if (sink.Kind == EndpointKind.Leave) return true;
+            if (sink.Kind == EndpointKind.Leave || sink.Kind == EndpointKind.GroundDrop || sink.Kind == EndpointKind.ToPlayer) return true;
+            if (sink.Kind == EndpointKind.Field) return Fields.SeedOf(sink.Prefab) == item;
             var go = sink.Resolve();
             if (!go) return false;
             switch (sink.Kind)
@@ -291,10 +366,141 @@ namespace Greenlings
             }
         }
 
+        /// <summary>
+        /// Where to take this item now. Jobs generalize: a torch job feeds whichever fire nearby
+        /// burns lowest, a kiln job works the whole row of kilns, and things go back into the chest
+        /// that already holds them. Null = nowhere has room right now.
+        /// </summary>
+        public static Endpoint Choose(LaborTask t, string item, Vector3 from)
+        {
+            var taught = t.Sink;
+            switch (taught.Kind)
+            {
+                case EndpointKind.Leave:
+                case EndpointKind.ToPlayer:
+                    return taught;
+                case EndpointKind.GroundDrop:
+                    return PileSize(taught.Pos, item) < Plugin.FeedPile.Value ? taught : null;
+                case EndpointKind.Field:
+                {
+                    // the next free spot on the field's grid
+                    var spot = Fields.NextSpot(taught, from);
+                    return spot.HasValue ? Fields.FieldAt(spot.Value, taught.Prefab) : null;
+                }
+                case EndpointKind.Container:
+                {
+                    var home = taught.Get<Container>();
+                    var chests = ChestsNear(taught.Pos, Plugin.WorkRadius.Value).ToList();
+                    bool Holds(Container c) => c.GetInventory().CountItems(Items.SharedName(item)) > 0;
+                    bool Room(Container c) => !c.IsInUse() && c.GetInventory().CanAddItem(ObjectDB.instance.GetItemPrefab(item), 1);
+                    // the chest it was shown, unless this item clearly lives somewhere else
+                    if (home && Room(home) && (Holds(home) || !chests.Any(c => c != home && Holds(c) && Room(c)))) return taught;
+                    var other = chests.Where(c => c != home && Holds(c) && Room(c)).OrderBy(c => Vector3.Distance(c.transform.position, from)).FirstOrDefault();
+                    if (other) return Endpoint.Like(taught, other);
+                    return home && Room(home) ? taught : null;
+                }
+                case EndpointKind.FireFuel:
+                {
+                    // every fire (torch, hearth, brazier) nearby that burns the same fuel: lowest first
+                    var best = Object.FindObjectsByType<Fireplace>(FindObjectsSortMode.None)
+                        .Where(f => f.m_nview && f.m_nview.IsValid() && f.m_canRefill && !f.m_infiniteFuel && f.m_fuelItem && f.m_fuelItem.name == item
+                                    && Vector3.Distance(f.transform.position, taught.Pos) < Plugin.WorkRadius.Value)
+                        .Select(f => (f, frac: f.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel) / Mathf.Max(1f, f.m_maxFuel)))
+                        .Where(x => Mathf.CeilToInt(x.f.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel)) < x.f.m_maxFuel)
+                        .OrderBy(x => x.frac).ThenBy(x => Vector3.Distance(x.f.transform.position, from))
+                        .Select(x => x.f).FirstOrDefault();
+                    return best ? Endpoint.Like(taught, best) : null;
+                }
+                default:
+                {
+                    // machines: the one shown, or another of the same kind standing next to it
+                    var station = taught.Resolve();
+                    if (!station) return null;
+                    var prefab = Utils.GetPrefabName(station);
+                    var bank = Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None)
+                        .Where(n => n && n.IsValid() && Utils.GetPrefabName(n.gameObject) == prefab
+                                    && Vector3.Distance(n.transform.position, station.transform.position) < Plugin.StationGroupRadius.Value)
+                        .Select(n => Endpoint.Like(taught, n))
+                        .Where(e => Accepts(e, item) && HasRoom(e, item))
+                        .OrderBy(e => e.SameAs(taught) ? 0 : 1).ThenBy(e => Vector3.Distance(e.CurrentPos(), from))
+                        .FirstOrDefault();
+                    return bank;
+                }
+            }
+        }
+
+        /// <summary>Could this sink take one more right now (without doing it)?</summary>
+        public static bool HasRoom(Endpoint sink, string item)
+        {
+            var go = sink.Resolve();
+            if (sink.Kind == EndpointKind.Leave || sink.Kind == EndpointKind.ToPlayer) return true;
+            if (sink.Kind == EndpointKind.GroundDrop) return PileSize(sink.Pos, item) < Plugin.FeedPile.Value;
+            if (sink.Kind == EndpointKind.Field) return Fields.NextSpot(sink, sink.Pos).HasValue;
+            if (!go) return false;
+            switch (sink.Kind)
+            {
+                case EndpointKind.Container:
+                    var c = go.GetComponent<Container>();
+                    return !c.IsInUse() && c.GetInventory().CanAddItem(ObjectDB.instance.GetItemPrefab(item), 1);
+                case EndpointKind.SmelterOre: return go.GetComponent<Smelter>().GetQueueSize() < go.GetComponent<Smelter>().m_maxOre;
+                case EndpointKind.SmelterFuel: return go.GetComponent<Smelter>().GetFuel() <= go.GetComponent<Smelter>().m_maxFuel - 1f;
+                case EndpointKind.FireFuel:
+                    var f = go.GetComponent<Fireplace>();
+                    return f.m_canRefill && !f.m_infiniteFuel && Mathf.CeilToInt(f.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel)) < f.m_maxFuel;
+                case EndpointKind.CookAdd:
+                    var k = go.GetComponent<CookingStation>();
+                    return k.GetFreeSlot() != -1 && (!k.m_requireFire || k.IsFireLit());
+                case EndpointKind.CookFuel: return go.GetComponent<CookingStation>().GetFuel() <= go.GetComponent<CookingStation>().m_maxFuel - 1f;
+                case EndpointKind.FermenterAdd: return go.GetComponent<Fermenter>().GetStatus() == Fermenter.Status.Empty;
+                default: return false;
+            }
+        }
+
+        private static IEnumerable<Container> ChestsNear(Vector3 at, float radius) =>
+            Object.FindObjectsByType<Container>(FindObjectsSortMode.None)
+                .Where(c => c.m_nview && c.m_nview.IsValid() && c.GetComponent<Piece>() && Vector3.Distance(c.transform.position, at) < radius);
+
+        /// <summary>Chests the player built, near a point.</summary>
+        public static IEnumerable<Container> Chests(Vector3 at, float radius) => ChestsNear(at, radius);
+
+        private static int PileSize(Vector3 at, string item) =>
+            Sources.DropsNear(at, 2f).Where(d => Utils.GetPrefabName(d.gameObject) == item).Sum(d => d.m_itemData.m_stack);
+
+        /// <summary>Lying in a feeding spot some greenling keeps stocked: leave it alone.</summary>
+        public static bool InFeedingPile(ItemDrop d)
+        {
+            foreach (var g in Greenling.All)
+            {
+                if (!g || !g.IsGreenling) continue;
+                foreach (var t in g.Job)
+                    if (t.Sink.Kind == EndpointKind.GroundDrop && Vector3.Distance(t.Sink.Pos, d.transform.position) < 2.5f) return true;
+            }
+            return false;
+        }
+
         /// <summary>Put one item in. False means full/busy/blocked right now: wait and retry.</summary>
         public static bool PutOne(Endpoint sink, string item, out string blocked)
         {
             blocked = "sink_full";
+            if (sink.Kind == EndpointKind.ToPlayer)
+            {
+                var p = sink.Player;
+                if (!p) { blocked = "player_gone"; return false; }
+                Prank.Drop(p.transform.position + p.transform.forward * 0.6f + Vector3.up * 0.4f, item, 1);
+                return true;
+            }
+            if (sink.Kind == EndpointKind.GroundDrop)
+            {
+                Prank.Drop(sink.Pos + new Vector3(Random.Range(-0.4f, 0.4f), 0.4f, Random.Range(-0.4f, 0.4f)), item, 1);
+                return true;
+            }
+            if (sink.Kind == EndpointKind.Field)
+            {
+                blocked = "spot_taken";
+                // someone may have planted here since this spot was picked
+                if (Physics.OverlapSphere(sink.Pos, 0.3f).Any(c => c.GetComponentInParent<Plant>() || c.GetComponentInParent<Pickable>())) return false;
+                return Fields.Plant(sink, sink.Pos);
+            }
             var go = sink.Resolve();
             if (!go) { blocked = "sink_gone"; return false; }
             var nview = go.GetComponent<ZNetView>();

@@ -35,12 +35,12 @@ namespace Greenlings
                 args.Context.AddString("gl_burst: " + g.Label);
             }, isCheat: true);
 
-            new Terminal.ConsoleCommand("gl_prank", "[zoomies|misplace|scatter|stare|gift] make the nearest idle greenling do something now", args =>
+            new Terminal.ConsoleCommand("gl_prank", "[zoomies|scatter|stare|gift|tag|huddle|herd|birds] make the nearest idle greenling do something now", args =>
             {
                 var p = Player.m_localPlayer;
                 var g = Greenling.All.Where(x => x.IsGreenling && x.IsOwner).OrderBy(x => Vector3.Distance(x.transform.position, p.transform.position)).FirstOrDefault();
                 if (!g) { args.Context.AddString("gl_prank: no greenling you own nearby"); return; }
-                g.Brain.StartPrank(args.Length > 1 ? args[1] : null);
+                g.Brain.StartPrank(args.Length > 1 ? args[1] : null, force: true);
                 args.Context.AddString("gl_prank: " + g.Label);
             }, isCheat: true);
         }
@@ -62,8 +62,11 @@ namespace Greenlings
                     .B("owner", g.IsOwner);
                 if (g.IsGreenling)
                 {
-                    j.S("state", g.State.ToString()).N("curiosity", g.Curiosity).S("mood", g.MoodWord())
-                     .N("attention", g.Attention).S("task", g.Task?.ToString() ?? "")
+                    j.S("state", g.State.ToString()).S("status", g.Status()).B("casual", g.CasualWatch).B("attentive", g.Attentive)
+                     .N("attention", g.Attention).S("task", string.Join(" ; ", g.Job.Select(t => t.ToString())))
+                     .S("habits", string.Join(" ; ", g.Habits.Select(t => t.ToString())))
+                     .S("follow", g.FollowTarget ? g.FollowTarget.GetPlayerName() : "").B("scared", g.Scared).S("tool", g.Tool)
+                     .S("prank", g.Brain.CurrentPrank?.Kind ?? "")
                      .S("carry", g.CarryItem).N("carryN", g.CarryCount)
                      .S("needs", Needs.Describe(g)).S("traits", g.TraitList).N("bond", g.Bond).S("role", Roles.Name(g.Role));
                 }

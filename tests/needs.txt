@@ -1,16 +1,18 @@
-# Upkeep: greenlings help themselves to food from a chest when hungry, and sleep in a nest at night.
+# Upkeep: greenlings eat food left lying about when hungry, and sleep in a nest at night (beds
+# are shared out each night; nests also count as home for the "no nest" need).
 !include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
 tod 0.5
 !include _tamed.txt
 !wait 2.5
 gl_dump 10
 !waitfor GLDUMP\] \{"type":"greenling".*"needs":"no nest" 2
-# hungry now: it finds the food chest
-gldev_place piece_chest_wood 3 4
-gldev_fill piece_chest_wood Raspberry 5
+# hungry now: it finds the berries on the ground
+gldev_drop Raspberry 2 3 4
 gldev_cfg greenlings Needs MealInterval 1
-!waitfor GLEVT\] meal_seek .*item=Raspberry 10
-!waitfor GLEVT\] meal .*item=Raspberry 30
+!waitfor GLEVT\] fed .*item=Raspberry how=(found|ground) 30
 gldev_cfg greenlings Needs MealInterval 900
 # a nest makes it a home; at night it goes to bed, in the morning it gets up
 gldev_place piece_greenling_nest -3 5
@@ -18,8 +20,16 @@ gldev_place piece_greenling_nest -3 5
 gl_dump 10
 !waitfor GLDUMP\] \{"type":"greenling".*"needs":"" 2
 tod 0
-!waitfor GLEVT\] sleep nest= 10
+!waitfor GLEVT\] sleep .*nest= 10
 !wait 3
 tod 0.5
 !waitfor GLEVT\] woke 10
 tod -1
+# by day it sometimes pops back for a rest, or plants something by the nest
+gldev_cfg greenlings Needs RestChance 1
+!waitfor GLEVT\] mischief .*kind=(rest|decorate) .*nest= 10
+!waitfor GLEVT\] mischief_done .*kind=(rest|decorate) 45
+gldev_cfg greenlings Needs RestChance 0.01
+gldev_cfg greenlings Mischief Chance 0.015
+gldev_cfg greenlings Labor ChoreChance 0.05
+gldev_cfg greenlings Teaching NaturalCuriosity 0.012

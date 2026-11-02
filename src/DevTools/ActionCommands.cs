@@ -38,7 +38,7 @@ namespace Greenlings.DevTools
             while (n > 0 && inv.AddItem(prefab, Mathf.Min(n, max))) n -= Mathf.Min(n, max);
         }
 
-        private static readonly string[] TamePrefabs = { "Greyling", "Greydwarf", "Greydwarf_Elite" };
+        private static readonly string[] TamePrefabs = { "Greyling", "Greydwarf", "Greydwarf_Elite", "Greydwarf_Shaman" };
         private static GameObject _lastTame;
 
         /// <summary>The tameable creature most recently placed by gldev_place, else the nearest greyling/greydwarf/brute.</summary>
@@ -101,6 +101,9 @@ namespace Greenlings.DevTools
                 P.SetGhostMode(!play);
                 Player.m_enableAutoPickup = play; // tests pick things up explicitly
                 if (!play) P.GetInventory().RemoveAll();
+                // every test starts from default Greenlings settings, whatever an earlier (failed) test changed
+                if (!play && BepInEx.Bootstrap.Chainloader.PluginInfos.TryGetValue("greenlings", out var gl))
+                    foreach (var key in gl.Instance.Config.Keys.ToList()) gl.Instance.Config[key].BoxedValue = gl.Instance.Config[key].DefaultValue;
                 Say(a, play ? "setup: god on, ghost off, auto-pickup on" : "setup: god+ghost on, auto-pickup off, inventory emptied");
             });
 
@@ -429,6 +432,88 @@ namespace Greenlings.DevTools
                 if (entry == null) { Say(a, $"no config {a[2]}.{a[3]}"); return; }
                 info.Instance.Config[entry].SetSerializedValue(a[4]);
                 Say(a, $"{a[1]} {a[2]}.{a[3]} = {info.Instance.Config[entry].BoxedValue}");
+            });
+
+            Cmd("gldev_dropitem", "<item> [n=1] drop items from the inventory like the player would (counts as a demonstration)", a =>
+            {
+                var item = P.GetInventory().GetAllItems().FirstOrDefault(i => i.m_dropPrefab && i.m_dropPrefab.name == a[1]);
+                if (item == null) { Say(a, "no " + a[1] + " in inventory"); return; }
+                Say(a, "dropitem " + (P.DropItem(P.GetInventory(), item, a.TryParameterInt(2, 1)) ? "ok" : "refused"));
+            });
+
+            Cmd("gldev_damage", "<prefab> <healthFraction> wear down the nearest piece of that prefab (for repair tests)", a =>
+            {
+                var go = NearestObject(a[1]);
+                var wear = go ? go.GetComponent<WearNTear>() : null;
+                if (!wear) { Say(a, "no piece " + a[1]); return; }
+                var v = wear.GetComponent<ZNetView>();
+                if (!v.IsOwner()) v.ClaimOwnership();
+                v.GetZDO().Set(ZDOVars.s_health, wear.m_health * a.TryParameterFloat(2, 0.5f));
+                v.InvokeRPC(ZNetView.Everybody, "RPC_HealthChanged", wear.m_health * a.TryParameterFloat(2, 0.5f));
+                Say(a, $"{a[1]} health {wear.GetHealthPercentage():0.00}");
+            });
+
+            Cmd("gldev_kill", "kill the nearest tamed greyling", a =>
+            {
+                var t = NearestTame();
+                var c = t ? t.GetComponent<Character>() : null;
+                if (!c) { Say(a, "no greyling"); return; }
+                var hit = new HitData();
+                hit.m_damage.m_damage = 99999f;
+                c.Damage(hit);
+                Say(a, "killed " + c.m_name);
+            });
+
+            Cmd("gldev_tamelast", "<prefab> instantly tame the nearest creature of that prefab (boars, wolves...)", a =>
+            {
+                var t = Nearest<Tameable>(a[1]);
+                if (!t) { Say(a, "no " + a[1]); return; }
+                t.Tame();
+                Say(a, "tamed " + a[1]);
+            });
+
+            Cmd("gldev_hurt", "<prefab> <healthFraction> set the nearest creature of that prefab to a fraction of its health", a =>
+            {
+                var c = Nearest<Character>(a[1]);
+                if (!c) { Say(a, "no " + a[1]); return; }
+                var v = c.GetComponent<ZNetView>();
+                if (!v.IsOwner()) v.ClaimOwnership();
+                c.SetHealth(c.GetMaxHealth() * a.TryParameterFloat(2, 0.3f));
+                Say(a, $"{a[1]} health {c.GetHealthPercentage():0.00}");
+            });
+
+            Cmd("gldev_cultivate", "<right> <forward> <width> <length> till a patch of ground (centre relative to the player, rows along the player's facing)", a =>
+            {
+                var op = ZNetScene.instance.GetPrefab("cultivate");
+                if (!op) { Say(a, "no cultivate prefab"); return; }
+                var t = P.transform;
+                var centre = t.position + t.right * a.TryParameterFloat(1) + t.forward * a.TryParameterFloat(2);
+                float w = a.TryParameterFloat(3, 3f), l = a.TryParameterFloat(4, 6f);
+                var n = 0;
+                for (var x = -w / 2f; x <= w / 2f + 0.01f; x += 1f)
+                for (var z = -l / 2f; z <= l / 2f + 0.01f; z += 1f)
+                {
+                    var pos = centre + t.right * x + t.forward * z;
+                    ZoneSystem.instance.GetGroundHeight(pos, out var y);
+                    pos.y = y;
+                    TerrainModifier.SetTriggerOnPlaced(true);
+                    Object.Instantiate(op, pos, Quaternion.identity);
+                    TerrainModifier.SetTriggerOnPlaced(false);
+                    n++;
+                }
+                Say(a, $"cultivated {w}x{l} ({n} ops) at {centre}");
+            });
+
+            Cmd("gldev_plant", "<piece> <right> <forward> plant a crop as the player would with the cultivator (counts as a demonstration)", a =>
+            {
+                var piece = ZNetScene.instance.GetPrefab(a[1])?.GetComponent<Piece>();
+                if (!piece) { Say(a, "no piece " + a[1]); return; }
+                var t = P.transform;
+                var pos = t.position + t.right * a.TryParameterFloat(2) + t.forward * a.TryParameterFloat(3);
+                ZoneSystem.instance.GetGroundHeight(pos, out var y);
+                pos.y = y;
+                P.PlacePiece(piece, pos, Quaternion.identity, false);
+                Say(a, $"planted {a[1]} at {pos}");
             });
 
             Cmd("gldev_prefabs", "<substring> list prefab names containing the substring", a =>

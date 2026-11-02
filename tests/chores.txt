@@ -1,0 +1,32 @@
+# With nothing to do, greenlings tidy loose things into the chest they belong in, and pick up
+# simple chores by watching you (no coin).
+!include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_place piece_chest_wood -3 4
+gldev_fill piece_chest_wood Flint 1
+gldev_drop Flint 2 2 6
+!include _tamed.txt
+gldev_cfg greenlings Labor ChoreChance 1
+!waitfor GLEVT\] chore .*kind=tidy .*Flint 10
+!waitfor GLEVT\] deposit .*item=Flint to=Container:piece_chest_wood 40
+gldev_cfg greenlings Labor ChoreChance 0
+!waitfor GLEVT\] chore_done .*kind=tidy 60
+!wait 3
+# curiosity: it wanders over to watch you, and picks up the chore of storing stone
+gldev_drop Stone 3 -2 6
+gldev_cfg greenlings Teaching NaturalCuriosity 1
+!waitfor GLEVT\] state .*to=Watching reason=curious 15
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_pickup Stone
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_put Stone 1
+gldev_close
+!waitfor GLEVT\] habit .*Stone: Ground 3
+!waitfor GLEVT\] chore .*kind=habit 3
+!waitfor GLEVT\] deposit .*item=Stone 40
+gldev_cfg greenlings Labor ChoreChance 0.05
+gldev_cfg greenlings Mischief Chance 0.015
+gldev_cfg greenlings Teaching NaturalCuriosity 0.012

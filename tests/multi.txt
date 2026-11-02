@@ -9,13 +9,11 @@ gldev_place Greyling -1 3
 gldev_tame
 gldev_bond 100
 gldev_useitem Coins
-gldev_pat
 gldev_place Greyling 1 3
 !wait 1
 gldev_tame
 gldev_bond 100
 gldev_useitem Coins
-gldev_pat
 !waitfor GLEVT\] state .*to=Watching 3
 !waitfor GLEVT\] state .*to=Watching 3
 gldev_open piece_chest_wood

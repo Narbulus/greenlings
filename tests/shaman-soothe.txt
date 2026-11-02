@@ -1,0 +1,16 @@
+# Shamans help strays settle in: they go over and soothe one, and it trusts a little more.
+!include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_cfg greenlings Needs RestChance 0
+gldev_place Greydwarf_Shaman 0 5
+gldev_tame
+gldev_bond 100
+gldev_place Greyling 5 9
+gldev_tame
+!wait 1
+gldev_cfg greenlings Shamans SootheChance 1
+!waitfor GLEVT\] mischief .*kind=soothe stray= 10
+!waitfor GLEVT\] soothed .*by= 25
+!waitfor GLEVT\] bond .*reason=shaman 3

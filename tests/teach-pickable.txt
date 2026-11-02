@@ -17,5 +17,5 @@ gldev_close
 !waitfor GLEVT\] harvest .*item=Raspberry 40
 !waitfor GLEVT\] harvest .*item=Raspberry 40
 !waitfor GLEVT\] deposit .*item=Raspberry 60
-!waitfor GLEVT\] wait .*reason=source_empty 60
+!waitfor GLEVT\] wait .*reason=(source_empty|no_work) 60
 gl_dump

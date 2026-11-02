@@ -1,0 +1,9 @@
+# Tame a greydwarf (machines are greydwarf work) and give it a coin: it is now watching the player.
+spawn Greydwarf 1
+!wait 1
+gldev_tame
+gldev_bond 100
+!wait 1.5
+gldev_give Coins 5
+gldev_useitem Coins
+!waitfor GLEVT\] state .*to=Watching 3

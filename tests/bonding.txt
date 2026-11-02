@@ -10,19 +10,18 @@ gldev_pat
 !waitfor GLEVT\] bond .*reason=pat 3
 gldev_pat
 !waitfor GLEVT\] pat_cooldown 3
-# food builds trust; coins don't
+# food builds trust (13 per meal, less for greedy ones); coins don't
 gldev_give Raspberry 3
 gldev_useitem Raspberry
-!waitfor GLEVT\] bond .*delta=\+10 .*reason=food 3
+!waitfor GLEVT\] bond .*delta=\+[0-9.]+ .*reason=food 3
 # nearly there: one more meal tips it over
 gldev_bond 95
 gldev_cfg greenlings Bonding FeedCooldown 0
 gldev_useitem Raspberry
 !waitfor GLEVT\] bonded 3
 gldev_cfg greenlings Bonding FeedCooldown 60
-# now a pat (with a coin for curiosity) starts a lesson
+# now a coin starts a lesson
 gldev_give Coins 3
 gldev_useitem Coins
-gldev_pat
 !waitfor GLEVT\] state .*to=Watching 3
 gl_dump 10

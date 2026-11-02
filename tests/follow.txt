@@ -1,0 +1,18 @@
+# E on a trusting greenling: follow me / stay. Strays tag along for a bit after a treat.
+!include _setup.txt
+!include _tamed.txt
+gldev_pat
+!waitfor GLEVT\] follow .*player= 3
+gldev_move 0 -10
+!wait 8
+gl_dump 8
+!waitfor GLDUMP\] \{"type":"greenling".*"follow":"\w+ 2
+gldev_pat
+!waitfor GLEVT\] stay .*reason=pat 3
+# a stray follows you for a little while after you feed it
+gldev_place Greyling 2 3
+!wait 1
+gldev_tame
+gldev_give Raspberry 2
+gldev_useitem Raspberry
+!waitfor GLEVT\] tag_along .*for=20s 3

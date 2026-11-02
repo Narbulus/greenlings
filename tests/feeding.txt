@@ -1,0 +1,31 @@
+# Upkeep: hungry greenlings eat food left on the ground (never from your chests), and one can be
+# taught to keep a feeding spot stocked.
+!include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_place piece_chest_wood -3 4
+gldev_fill piece_chest_wood Raspberry 10
+!include _tamed.txt
+gldev_cfg greenlings Needs MealInterval 1
+!waitfor GLEVT\] no_food 10
+gldev_cfg greenlings Needs MealInterval 900
+# teach it: take berries from the chest, drop them on the ground
+gldev_give Coins 3
+gldev_useitem Coins
+!waitfor GLEVT\] state .*to=Watching 3
+gldev_open piece_chest_wood
+!wait 0.5
+gldev_take Raspberry 1
+gldev_close
+gldev_dropitem Raspberry
+!waitfor GLEVT\] learned .*Raspberry: Container:piece_chest_wood#\d+ -> GroundDrop 3
+!waitfor GLEVT\] deposit .*item=Raspberry to=GroundDrop 40
+!waitfor GLEVT\] wait .*reason=no_work 60
+# and now when it is hungry, there is food
+gldev_cfg greenlings Needs MealInterval 1
+!waitfor GLEVT\] fed .*item=Raspberry how=(found|ground) 30
+gldev_cfg greenlings Needs MealInterval 900
+gldev_cfg greenlings Mischief Chance 0.015
+gldev_cfg greenlings Labor ChoreChance 0.05
+gldev_cfg greenlings Teaching NaturalCuriosity 0.012

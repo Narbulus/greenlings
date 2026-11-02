@@ -1,0 +1,14 @@
+# Something needs fixing and there's a hammer in a chest nearby: a greenling fetches it and gets on with it.
+!include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_cfg greenlings Needs RestChance 0
+gldev_place woodwall 3 5
+gldev_place piece_chest_wood -3 4
+gldev_fill piece_chest_wood Hammer 1
+!include _tamed.txt
+gldev_damage woodwall 0.4
+gldev_cfg greenlings Labor ChoreChance 1
+!waitfor GLEVT\] mischief .*kind=fetch_tool tool=Hammer chest=piece_chest_wood 20
+!waitfor GLEVT\] tool .*item=Hammer from=Container:piece_chest_wood 20
+!waitfor GLEVT\] repair .*piece=woodwall 40

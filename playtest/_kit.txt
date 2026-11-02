@@ -1,5 +1,8 @@
 # What you carry for testing.
 gldev_give Hammer 1
+gldev_give Cultivator 1
+gldev_give CarrotSeeds 10
+gldev_give Thistle 10
 gldev_give SwordIron 1
 gldev_give Coins 100
 gldev_give Wood 40

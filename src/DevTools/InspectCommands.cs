@@ -42,6 +42,11 @@ namespace Greenlings.DevTools
                 var hum = prefab.GetComponent<Humanoid>();
                 if (hum) sb.AppendLine("defaultItems: " + string.Join(", ", (hum.m_defaultItems ?? new GameObject[0]).Select(g => g ? g.name : "null")) +
                                        " | randomWeapon: " + string.Join(", ", (hum.m_randomWeapon ?? new GameObject[0]).Select(g => g ? g.name : "null")));
+                foreach (Transform c in prefab.transform)
+                {
+                    var b = c.GetComponentsInChildren<Renderer>(true).Select(r => r.bounds).DefaultIfEmpty().Aggregate((x, y) => { x.Encapsulate(y); return x; });
+                    sb.AppendLine($"child {c.name} pos={c.localPosition} rot={c.localEulerAngles} scale={c.localScale} bounds(center={b.center - prefab.transform.position} size={b.size})");
+                }
                 if (prefab.GetComponent<VisEquipment>() is VisEquipment ve)
                     sb.AppendLine($"visEquipment: rightHand={(ve.m_rightHand ? ve.m_rightHand.name : "null")} leftHand={(ve.m_leftHand ? ve.m_leftHand.name : "null")}");
                 foreach (var r in prefab.GetComponentsInChildren<Renderer>(true))

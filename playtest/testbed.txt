@@ -21,8 +21,16 @@ gldev_place RaspberryBush -13 2
 gldev_place RaspberryBush -14 5
 gldev_place RaspberryBush -12 7
 gldev_place RaspberryBush -15 8
-# a nest for the greenlings to sleep in
+# nests (two sleep in each) and a couple of torches to keep lit
 gldev_place piece_greenling_nest -8 -1
+gldev_place piece_greenling_nest -10 2
+gldev_place piece_groundtorch_wood -3 8
+gldev_place piece_groundtorch_wood 4 9
+# a worn wall for a greenling with a hammer
+gldev_place woodwall -6 -6
+gldev_damage woodwall 0.4
+# a tilled strip to plant (back right); seeds and a spare cultivator are in the small chest
+gldev_cultivate 10 -9 4 7
 # a mess to tidy up
 gldev_drop Wood 8 -3 17
 
@@ -31,13 +39,19 @@ gldev_fill piece_chest_wood Wood 60
 gldev_fill piece_chest_wood CopperOre 30
 gldev_fill piece_chest_wood TinOre 20
 gldev_fill piece_chest_wood Coal 40
+gldev_fill piece_chest_wood Resin 20
 gldev_fill piece_chest_wood RawMeat 20
 gldev_fill piece_chest_wood MeadBaseHealthMinor 4
-# food for hungry greenlings (they raid the nearest chest with food)
+gldev_fill piece_chest_wood CarrotSeeds 40
+gldev_fill piece_chest_wood TurnipSeeds 20
+gldev_fill piece_chest_wood Cultivator 1
+gldev_fill piece_chest_wood Hammer 1
+# food: greenlings only eat what's left on the ground (drop some, or teach one to stock a feeding spot)
 gldev_fill piece_chest_wood Raspberry 30
+gldev_drop Raspberry 4 -7 2
 gldev_ready piece_beehive
 
-# --- three trusting greenlings (teachable; they need coins to get curious) ---
+# --- three trusting greenlings (give one a coin to teach it) ---
 gldev_place Greyling -2 3
 gldev_tame
 gldev_bond 100
@@ -45,6 +59,17 @@ gldev_place Greyling 0 3.5
 gldev_tame
 gldev_bond 100
 gldev_place Greyling 2 3
+gldev_tame
+gldev_bond 100
+# --- a greydwarf (runs machines) and a brute (smashes) ---
+gldev_place Greydwarf -4 2
+gldev_tame
+gldev_bond 100
+gldev_place Greydwarf_Elite 6 -3
+gldev_tame
+gldev_bond 100
+# --- a shaman (heals, plants, soothes strays) ---
+gldev_place Greydwarf_Shaman 8 -5
 gldev_tame
 gldev_bond 100
 # --- and a fresh stray to bond with: feed it berries/mushrooms/honey, pat it, keep it company ---
@@ -59,4 +84,4 @@ gldev_place Pickable_Flint 3 -2
 gldev_use fire_pit Wood
 gldev_use fire_pit Wood
 gldev_goto piece_workbench
-gldev_say Testbed ready. Three greenlings + one new stray (front right). Supplies in the small chest. F5: gldev_run testbed_help
+gldev_say Testbed ready. Three greenlings, a greydwarf, a brute, a shaman and one new stray (front right). Supplies in the small chest. F5: gldev_run testbed_help

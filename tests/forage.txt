@@ -1,0 +1,17 @@
+# A curious greenling watching you pick berries runs off and picks some for you.
+!include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_place RaspberryBush 3 6
+gldev_place RaspberryBush 5 7
+gldev_place RaspberryBush 4 9
+!include _tamed.txt
+gldev_cfg greenlings Teaching NaturalCuriosity 1
+!waitfor GLEVT\] state .*to=Watching reason=curious 15
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_interact RaspberryBush
+!wait 1
+gldev_pickup Raspberry
+!waitfor GLEVT\] habit .*Raspberry: PickableArea:RaspberryBush.* -> ToPlayer 3
+!waitfor GLEVT\] chore .*kind=habit 3
+!waitfor GLEVT\] deposit .*item=Raspberry to=ToPlayer 60

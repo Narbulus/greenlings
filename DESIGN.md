@@ -107,15 +107,73 @@ still renameable.
 **Needs/upkeep.** A nest (buildable piece) and food. Unmet needs mean less productive and more
 unruly; they never die or untame from neglect.
 
+## Third playtest round (2026-11-01): what changed
+
+**Teaching is bought, not gated.** Curiosity as a gate is gone ("upkeep is the work, not mood
+management"). A **coin** used on any trusting greenling starts a lesson. Attention times out, but
+every demonstrated step tops it up. After a lesson it stays **attentive** for a minute: more demos
+add steps to a multi-step **job** (max 3), and a demo with the same source or sink corrects that
+step. A pat while watching = never mind.
+
+**Natural curiosity.** Idle, fed greenlings sometimes come and watch you unpaid. They only take
+**no-regret** chores from that (put away from ground/forage/hive, feed fires, brute smashing; never
+chest-to-chest or machines), keep them as **habits** (max 3) and jump in for a few trips. Picking
+berries in front of one sends it foraging for you (drops them at your feet).
+
+**Jobs generalize.** Producer sources work every same-prefab producer within WorkRadius (20m) and
+collect matching loose items there (stray honey; anything a cooking station makes). Fire jobs feed
+whichever same-fuel fire nearby is lowest. Machine jobs work the bank of same-prefab stations within
+8m. Chest sinks prefer the chest that already holds the item. Stations that take several inputs
+take any accepted item from the source chest. Step choice per trip: first step with work AND
+somewhere to put it.
+
+**Free time.** Idle (or stuck waiting with empty hands) greenlings: tidy (loose item -> a chest that
+already holds it; never food), help a working friend nearby with one of its steps, run a habit,
+repair with a hammer, rest/decorate at the nest, games (tag, huddle in a ring, chase tame animals,
+chase birds, which really take off), or mischief that never touches chests.
+
+**Follow.** E on a trusting greenling toggles follow/stay. Strays tag along ~20s after a pat or a treat.
+
+**Danger.** Greenlings ignore animals (never target non-monsters). Greylings and hurt greydwarfs
+flee monsters: to a player or brute (hide behind it) or panic; a pat calms one once the threat is
+gone. Brutes and healthy greydwarfs fight monsters (vanilla).
+
+**Upkeep.** Food only from the ground (no chest raiding); a greenling can be taught to stock a
+feeding spot (GroundDrop sink, keeps a small pile, never tidied away). Nests sleep 2 each, assigned
+dynamically each night; "homeless" uses a fixed pecking order so all clients agree.
+
+**Misc.** Doors (not gates) opened when walking into one or when no path exists. Carried items and
+hammer drop on death. Brutes tame on amber / amber pearls. Head plants limited to forest things and
+pinned to the top of the skull mesh (bind-pose crown vertices, parented to the head bone).
+
+## Shamans and tools (2026-11-02)
+
+**Shamans** (Greydwarf_Shaman, tamed with thistle): greyling chores + planting (nobody else plants). Heal tamed
+creatures nearby between trips (owner-side "heal" prank, Character.Heal routes via RPC). Their company counts for
+stray trust, and they actively soothe strays (GL_Soothe, per-stray cooldown).
+
+**Fields.** Planting is a sink (EndpointKind.Field, Prefab = crop piece). The grid is inferred once per field and kept:
+spacing = upper quartile of nearest-neighbour distances between the crops already there (robust to jitter),
+or the crop's grow radius; row direction = 4-fold circular mean of those steps (a square grid's two axes agree),
+or the cultivated patch's principal axis. The field is a flood fill over grid cells from the taught spot through
+cultivated ground, stopping at other crops. Next spot = lowest row rank (start row, then alternating outward),
+nearest to the shaman. Each crop is jittered within the slack its growing room allows. Harvested gaps get replanted.
+
+**Tools.** One tool slot (gl_tool). Steps can need a tool (Field needs Cultivator); a missing tool is fetched from the
+job's source chest or the nearest chest near the work, else the greenling waits ("needs_cultivator"). Hammers get
+fetched for repair when something nearby is worn. Visual: the item's own "attach" model; grip fitted from the
+hand bones (knuckles give the fist and the across-the-fist axis, wrist->knuckles gives the forearm), with the tool's
+handle (attach origin -> model centre) across the fist and its head along the forearm. Long tools are held a third of the way up.
+
 ## Later
 
-Traits (lazy, clever, clumsy), skill progression (faster learning, bigger carries),
-breeding (`Procreation`), tameable brutes and shamans, more task types.
+Skill progression (faster learning, bigger carries), breeding (`Procreation`),
+Beasts of Burden cart integration, more tools (axes/pickaxes), shamans calming wild creatures.
 
 ## Decisions
 
 - Every source/sink kind in the table below is wanted; adapters get added one at a time.
-- E is only **Pat**. A pat starts a lesson when curiosity is high enough. Shift+E renames.
+- E is **Pat**: affection for strays, follow/stay for greenlings, never-mind while watching, calm when scared. Shift+E renames. A coin teaches.
 - Greenlings stay fragile (20 HP). Protecting them is part of the game.
 
 ## Task adapters

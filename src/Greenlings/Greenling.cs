@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using HarmonyLib;
 using UnityEngine;
 
 namespace Greenlings
@@ -19,10 +20,12 @@ namespace Greenlings
         public static readonly List<Greenling> All = new List<Greenling>();
 
         private static readonly int ColorId = Shader.PropertyToID("_Color");
-        internal const string ZState = "gl_state", ZCuriosity = "gl_curiosity", ZMoodTarget = "gl_mood",
-            ZTeacher = "gl_teacher", ZAttention = "gl_attention", ZTask = "gl_task",
+        internal const string ZState = "gl_state", ZTeacher = "gl_teacher", ZAttention = "gl_attention", ZTask = "gl_task",
+            ZCasual = "gl_casual", ZAttentiveUntil = "gl_attentive", ZHabits = "gl_habits",
             ZCarryItem = "gl_carry_item", ZCarryCount = "gl_carry_n",
-            ZBond = "gl_bond", ZLastPat = "gl_last_pat", ZLastFed = "gl_last_fed", ZTraits = "gl_traits";
+            ZBond = "gl_bond", ZLastPat = "gl_last_pat", ZLastFed = "gl_last_fed", ZTraits = "gl_traits",
+            ZFollow = "gl_follow", ZFollowUntil = "gl_follow_until", ZScaredUntil = "gl_scared", ZTool = "gl_tool",
+            ZLastSoothe = "gl_last_soothe";
 
         public Character Character { get; private set; }
         public MonsterAI AI { get; private set; }
@@ -35,40 +38,66 @@ namespace Greenlings
         private string _wildName;
         private float _appliedTint = -1f;
         private bool _wasStray;
-        private LaborTask _taskCache;
-        private string _taskCacheKey;
+        private List<LaborTask> _jobCache = new List<LaborTask>();
+        private string _jobCacheKey;
 
         public bool IsGreenling => Character && Character.IsTamed();
         public ZDO Zdo => NView && NView.IsValid() ? NView.GetZDO() : null;
         public bool IsOwner => NView && NView.IsValid() && NView.IsOwner();
 
         public GreenlingState State => (GreenlingState)(Zdo?.GetInt(ZState) ?? 0);
-        public float Curiosity => Zdo?.GetFloat(ZCuriosity, 40f) ?? 0f;
         public ZDOID Teacher => Zdo?.GetZDOID(ZTeacher) ?? ZDOID.None;
         public float Attention => Zdo?.GetFloat(ZAttention) ?? 0f;
+        /// <summary>Watching because it felt like it, not because it was paid: it only picks up simple chores.</summary>
+        public bool CasualWatch => State == GreenlingState.Watching && (Zdo?.GetBool(ZCasual) ?? false);
+        /// <summary>Just learned something and still paying attention to its teacher (corrections, extra steps).</summary>
+        public bool Attentive => State == GreenlingState.Working && Now < (Zdo?.GetLong(ZAttentiveUntil, 0L) ?? 0L);
         /// <summary>
         /// Trust, 0-100. A freshly tamed greyling is a Stray (bond 0); at 100 it is a teachable
         /// Greenling. Missing value = 100 so greenlings tamed before bonding existed stay teachable.
         /// </summary>
         public float Bond => Zdo?.GetFloat(ZBond, 100f) ?? 0f;
         public bool IsStray => IsGreenling && Bond < 100f;
+        public bool IsBonded => IsGreenling && Bond >= 100f;
         /// <summary>Updated every couple of seconds (finding nests isn't free).</summary>
         public bool HomelessCached { get; private set; }
         public string TraitList => Zdo?.GetString(ZTraits) ?? "";
         public bool Has(string trait) => TraitList.Split(',').Contains(trait);
-        public bool IsBonded => IsGreenling && Bond >= 100f;
         public string CarryItem => Zdo?.GetString(ZCarryItem) ?? "";
         public int CarryCount => Zdo?.GetInt(ZCarryCount) ?? 0;
+        public string Tool => Zdo?.GetString(ZTool) ?? "";
+        public bool Scared => Now < (Zdo?.GetLong(ZScaredUntil, 0L) ?? 0L);
 
-        public LaborTask Task
+        /// <summary>The player it is following, or null (following ends by itself when it was only tagging along).</summary>
+        public Player FollowTarget
+        {
+            get
+            {
+                var z = Zdo;
+                if (z == null) return null;
+                var id = z.GetZDOID(ZFollow);
+                if (id.IsNone()) return null;
+                var until = z.GetLong(ZFollowUntil, 0L);
+                if (until != 0L && Now > until) return null;
+                return ZNetScene.instance.FindInstance(id)?.GetComponent<Player>();
+            }
+        }
+
+        internal static long Now => ZNet.instance ? ZNet.instance.GetTime().Ticks : 0L;
+        internal static long Ticks(float seconds) => (long)(seconds * System.TimeSpan.TicksPerSecond);
+
+        /// <summary>Its job: one or more steps ("take X from here, put it there"), done in turn.</summary>
+        public List<LaborTask> Job
         {
             get
             {
                 var s = Zdo?.GetString(ZTask) ?? "";
-                if (s != _taskCacheKey) { _taskCacheKey = s; _taskCache = LaborTask.Parse(s); }
-                return _taskCache;
+                if (s != _jobCacheKey) { _jobCacheKey = s; _jobCache = LaborTask.ParseJob(s); }
+                return _jobCache;
             }
         }
+
+        public List<LaborTask> Habits => LaborTask.ParseJob(Zdo?.GetString(ZHabits) ?? "");
 
         public string Label => $"{GetName()}#{(Zdo != null ? Zdo.m_uid.ID : 0)}";
         public string GetName() =>
@@ -90,19 +119,21 @@ namespace Greenlings
         {
             if (NView.IsValid())
             {
-                NView.Register("GL_Gift", RPC_Gift);
-                NView.Register<ZDOID>("GL_StartWatch", RPC_StartWatch);
+                NView.Register<ZDOID, bool>("GL_StartWatch", RPC_StartWatch);
                 NView.Register<string>("GL_Learn", RPC_Learn);
+                NView.Register<string>("GL_Habit", RPC_Habit);
+                NView.Register("GL_Attend", RPC_Attend);
                 NView.Register("GL_Dismiss", RPC_Dismiss);
-                NView.Register("GL_Swat", RPC_Swat);
                 NView.Register("GL_Burst", RPC_Burst);
-                NView.Register<ZDOID>("GL_Affection", RPC_Affection);
+                NView.Register<ZDOID>("GL_Pat", RPC_Pat);
                 NView.Register<string, ZDOID>("GL_Feed", RPC_Feed);
                 NView.Register<string, string, ZDOID>("GL_Mimic", RPC_Mimic);
+                NView.Register<string>("GL_Tool", RPC_Tool);
+                NView.Register<ZDOID>("GL_Soothe", RPC_Soothe);
             }
-            AI.m_onConsumedItem += item => Event("ate", $"item={Utils.GetPrefabName(item.gameObject)} tameness={Tameable.GetTameness()}%");
+            AI.m_onConsumedItem += OnAte;
             InvokeRepeating(nameof(Refresh), 0f, 1f);
-            InvokeRepeating(nameof(DriftMood), 2f, 2f);
+            InvokeRepeating(nameof(Think), 2f, 2f);
         }
 
         private void OnEnable() => All.Add(this);
@@ -120,15 +151,8 @@ namespace Greenlings
             if (!IsOwner || State == s) return;
             Event("state", $"from={State} to={s} reason={reason}");
             Zdo.Set(ZState, (int)s);
+            if (s != GreenlingState.Watching) Zdo.Set(ZCasual, false);
             Brain.OnStateChanged(s);
-        }
-
-        internal void AddCuriosity(float delta, string reason)
-        {
-            if (!IsOwner) return;
-            var v = Mathf.Clamp(Curiosity + delta, 0f, 100f);
-            Zdo.Set(ZCuriosity, v);
-            Event("curiosity", $"delta={delta:+0;-0} now={v:0} reason={reason}");
         }
 
         internal void SetCarry(string item, int n)
@@ -136,6 +160,17 @@ namespace Greenlings
             Zdo.Set(ZCarryItem, n > 0 ? item : "");
             Zdo.Set(ZCarryCount, n);
         }
+
+        internal void SetJob(List<LaborTask> job) => Zdo.Set(ZTask, LaborTask.SerializeJob(job));
+
+        internal void Follow(Player p, float seconds)
+        {
+            if (!IsOwner) return;
+            Zdo.Set(ZFollow, p ? p.GetZDOID() : ZDOID.None);
+            Zdo.Set(ZFollowUntil, p && seconds > 0f ? Now + Ticks(seconds) : 0L);
+        }
+
+        internal void SetScared(float seconds) => Zdo.Set(ZScaredUntil, seconds > 0f ? Now + Ticks(seconds) : 0L);
 
         internal void AddBond(float delta, string reason)
         {
@@ -153,34 +188,70 @@ namespace Greenlings
         private static bool CooledDown(ZDO zdo, string key, float seconds) =>
             (ZNet.instance.GetTime() - new System.DateTime(zdo.GetLong(key, 0L))).TotalSeconds >= seconds;
 
-        /// <summary>Curiosity wanders toward a mood target that changes on a whim.</summary>
-        private void DriftMood()
+        /// <summary>Every couple of seconds: needs, trust from company, and what to do with itself.</summary>
+        private void Think()
         {
             if (!IsGreenling) return;
             HomelessCached = Needs.Homeless(this);
+            UpdateDiet();
             if (!IsOwner) return;
-            if (Zdo.GetLong(ZLastFed, 0L) == 0L) Zdo.Set(ZLastFed, ZNet.instance.GetTime().Ticks); // start out fed
-            Brain.CheckNeeds();
-            if (IsStray && Player.GetClosestPlayer(transform.position, Plugin.BondNearRange.Value))
-                AddBond(Plugin.BondNearPerMinute.Value / 30f, "nearby"); // called every 2s
-            var target = Zdo.GetFloat(ZMoodTarget, 40f);
-            if (Random.value < 0.03f) // a new whim every ~minute on average
+            if (!IsStray && Zdo.GetLong(ZLastFed, 0L) == 0L) Zdo.Set(ZLastFed, Now); // start out fed
+            if (IsStray)
             {
-                target = Random.Range(Plugin.MoodMin.Value, Plugin.MoodMax.Value);
-                Zdo.Set(ZMoodTarget, target);
+                // company: yours, and a trusting shaman's (they help strays settle in)
+                var company = (Player.GetClosestPlayer(transform.position, Plugin.BondNearRange.Value) ? 1f : 0f)
+                              + (Shamans.Near(this, Plugin.BondNearRange.Value) ? Plugin.ShamanCompany.Value : 0f);
+                if (company > 0f) AddBond(Plugin.BondNearPerMinute.Value / 30f * company, "nearby"); // called every 2s
             }
-            var cur = Curiosity;
-            Zdo.Set(ZCuriosity, Mathf.Clamp(cur + (target - cur) * 0.04f + Random.Range(-1f, 1f), 0f, 100f));
-            Brain.MaybeMisbehave();
+            Brain.Think();
+        }
+
+        // ---- eating ------------------------------------------------------------------------
+
+        private bool _dietTamed;
+
+        /// <summary>
+        /// Wild ones eat the taming item off the ground (vanilla consume AI); greenlings eat real food
+        /// lying around instead. The list is per instance, so switch it when tamed.
+        /// </summary>
+        private void UpdateDiet()
+        {
+            if (_dietTamed) return;
+            _dietTamed = true;
+            AI.m_consumeItems = Interaction.FoodPrefabs().ToList();
+        }
+
+        /// <summary>Whether it would eat right now: strays have a short "full" timer, greenlings eat at mealtimes.</summary>
+        public bool WantsFood => Zdo != null && (IsStray ? CooledDown(Zdo, ZLastFed, Plugin.FeedCooldown.Value) : Needs.Hungry(this));
+
+        /// <summary>Vanilla consume AI ate something off the ground (owner only).</summary>
+        private void OnAte(ItemDrop item)
+        {
+            var prefab = Utils.GetPrefabName(item.gameObject);
+            if (!IsGreenling) { Event("ate", $"item={prefab} tameness={Tameable.GetTameness()}%"); return; }
+            Fed(prefab, null, "ground");
+        }
+
+        /// <summary>Owner: it ate something (handed over, off the ground, or on its own).</summary>
+        internal void Fed(string item, Player by, string how)
+        {
+            Zdo.Set(ZLastFed, Now);
+            Event("fed", $"item={item} how={how}");
+            if (!IsStray) return;
+            AddBond(Plugin.FoodBond.Value * Traits.FoodBond(this), "food");
+            var p = by ? by : Player.GetClosestPlayer(transform.position, 15f);
+            if (p && IsStray) TagAlong(p);
+        }
+
+        /// <summary>A stray tags along for a bit after a treat or a pat (easy to lead home).</summary>
+        private void TagAlong(Player p)
+        {
+            if (Plugin.TagAlongTime.Value <= 0f || (FollowTarget && Zdo.GetLong(ZFollowUntil, 0L) == 0L)) return; // already following for good
+            Follow(p, Plugin.TagAlongTime.Value);
+            Event("tag_along", $"player={p.GetPlayerName()} for={Plugin.TagAlongTime.Value:0}s");
         }
 
         // ---- RPC handlers (run on the owner) -----------------------------------------------
-
-        private void RPC_Gift(long sender)
-        {
-            if (!IsOwner) return;
-            AddCuriosity(Plugin.CoinCuriosity.Value * Traits.CoinCuriosity(this), "coin");
-        }
 
         private float _lastMimic;
 
@@ -192,67 +263,143 @@ namespace Greenlings
             StartCoroutine(Mimicry.Copy(this, action, anim));
         }
 
-        /// <summary>A pat on a stray: affection, on a cooldown so it can't be spammed.</summary>
-        private void RPC_Affection(long sender, ZDOID player)
-        {
-            if (!IsOwner || !IsStray) return;
-            if (!CooledDown(Zdo, ZLastPat, Plugin.PatCooldown.Value * Traits.PatCooldown(this))) { Event("pat_cooldown"); return; }
-            Zdo.Set(ZLastPat, ZNet.instance.GetTime().Ticks);
-            AddBond(Plugin.PatBond.Value * Traits.PatBond(this), "pat");
-        }
-
-        /// <summary>Food (not coins) builds trust while it is a stray, and lifts its mood once bonded.</summary>
-        private void RPC_Feed(long sender, string item, ZDOID player)
+        /// <summary>
+        /// E on a greenling. Calms a frightened one; on a stray it is affection (trust, on a cooldown)
+        /// and it tags along; on a trusting one it toggles follow / stay.
+        /// </summary>
+        private void RPC_Pat(long sender, ZDOID playerId)
         {
             if (!IsOwner) return;
-            Zdo.Set(ZLastFed, ZNet.instance.GetTime().Ticks);
-            Event("fed", $"item={item}");
-            if (IsStray) AddBond(Plugin.FoodBond.Value * Traits.FoodBond(this), "food");
-            else AddCuriosity(Plugin.FoodCuriosity.Value, "food");
+            var player = ZNetScene.instance.FindInstance(playerId)?.GetComponent<Player>();
+            var fresh = CooledDown(Zdo, ZLastPat, Plugin.PatCooldown.Value * Traits.PatCooldown(this));
+            if (fresh) Zdo.Set(ZLastPat, Now);
+            Event(fresh ? "pat" : "pat_cooldown", $"stray={IsStray}");
+
+            if (Scared && !Danger.ThreatNear(this))
+            {
+                SetScared(0f);
+                Event("calm", "reason=pat");
+                return;
+            }
+            if (IsStray)
+            {
+                if (fresh) AddBond(Plugin.PatBond.Value * Traits.PatBond(this), "pat");
+                if (player) TagAlong(player);
+                return;
+            }
+            if (CasualWatch) SetState(Job.Count > 0 ? GreenlingState.Working : GreenlingState.Idle, "pat");
+            if (FollowTarget && Zdo.GetLong(ZFollowUntil, 0L) == 0L)
+            {
+                Follow(null, 0f);
+                Event("stay", "reason=pat");
+            }
+            else if (player)
+            {
+                Follow(player, 0f);
+                Event("follow", $"player={player.GetPlayerName()}");
+            }
         }
 
-        /// <summary>Whether this greenling would eat right now (feeding has a cooldown: it gets full).</summary>
-        public bool Hungry => Zdo != null && CooledDown(Zdo, ZLastFed, Plugin.FeedCooldown.Value);
+        /// <summary>Whether a shaman may soothe this stray now (not soothed lately).</summary>
+        public bool CanBeSoothed => IsStray && Zdo != null && CooledDown(Zdo, ZLastSoothe, Plugin.SootheCooldown.Value);
 
-        private void RPC_StartWatch(long sender, ZDOID teacher)
+        /// <summary>A shaman soothes this stray: a little trust, and it calms down.</summary>
+        private void RPC_Soothe(long sender, ZDOID shaman)
+        {
+            if (!IsOwner || !CanBeSoothed) return;
+            Zdo.Set(ZLastSoothe, Now);
+            Tameable.m_sootheEffect.Create(transform.position, transform.rotation);
+            var by = ZNetScene.instance.FindInstance(shaman)?.GetComponent<Greenling>();
+            Event("soothed", "by=" + (by ? by.Label : "?"));
+            if (Scared && !Danger.ThreatNear(this)) SetScared(0f);
+            AddBond(Plugin.SootheBond.Value, "shaman");
+        }
+
+        private void RPC_Feed(long sender, string item, ZDOID playerId) =>
+            Fed(item, ZNetScene.instance.FindInstance(playerId)?.GetComponent<Player>(), "hand");
+
+        /// <summary>Paid to pay attention (casual = it wandered over by itself).</summary>
+        private void RPC_StartWatch(long sender, ZDOID teacher, bool casual)
         {
             if (!IsOwner) return;
             if (IsStray) { Event("refuse", "reason=stray"); return; }
-            if (Curiosity < Plugin.LearnThreshold.Value)
-            {
-                Event("refuse", $"curiosity={Curiosity:0}");
-                return;
-            }
+            if (casual && State != GreenlingState.Idle) return;
             Zdo.Set(ZTeacher, teacher);
-            Zdo.Set(ZAttention, Plugin.AttentionSpan.Value * Traits.Attention(this));
-            SetState(GreenlingState.Watching, "pat");
+            Zdo.Set(ZAttention, casual ? Plugin.CasualAttention.Value : Plugin.AttentionSpan.Value * Traits.Attention(this));
+            Zdo.Set(ZAttentiveUntil, 0L);
+            Follow(null, 0f);
+            SetState(GreenlingState.Watching, casual ? "curious" : "coin");
+            Zdo.Set(ZCasual, casual);
         }
 
-        private void RPC_Learn(long sender, string taskString)
+        /// <summary>The teacher just demonstrated something: worth paying attention a little longer.</summary>
+        private void RPC_Attend(long sender)
         {
             if (!IsOwner || State != GreenlingState.Watching) return;
+            var top = CasualWatch ? Plugin.CasualAttention.Value * 0.5f : Plugin.DemoAttention.Value;
+            if (Attention < top) Zdo.Set(ZAttention, top);
+        }
+
+        /// <summary>
+        /// A lesson. While it watches (or just after a lesson) every demonstration adds a step to its
+        /// job, or replaces the step it corrects (same place to take from, or to put into).
+        /// </summary>
+        private void RPC_Learn(long sender, string taskString)
+        {
+            if (!IsOwner || !(State == GreenlingState.Watching || Attentive)) return;
             var task = LaborTask.Parse(taskString);
-            Zdo.Set(ZTask, taskString);
-            Event("learned", $"task=\"{task}\"");
-            AddCuriosity(-Plugin.LearnCost.Value, "learned");
-            SetState(GreenlingState.Working, "learned");
+            // the first demonstration after a coin starts a new job; later ones (while attentive) build on it
+            var job = State == GreenlingState.Watching ? new List<LaborTask>() : Job.ToList();
+            var replaced = job.FindIndex(t => t.Corrects(task));
+            if (replaced >= 0) job[replaced] = task;
+            else
+            {
+                job.Add(task);
+                while (job.Count > Mathf.Max(1, Plugin.MaxJobSteps.Value)) job.RemoveAt(0);
+            }
+            SetJob(job);
+            Event("learned", $"task=\"{task}\" steps={job.Count}{(replaced >= 0 ? " corrected=" + replaced : "")}");
+            Zdo.Set(ZAttentiveUntil, Now + Ticks(Plugin.AttentiveAfterLesson.Value));
+            if (State != GreenlingState.Working) SetState(GreenlingState.Working, "learned");
+            else Brain.OnJobChanged();
             NView.InvokeRPC(ZRoutedRpc.Everybody, "GL_Burst");
             Brain.DrawAudience("learned");
+        }
+
+        /// <summary>Picked up a simple chore by watching (no coin): keeps it as a habit and jumps in to help.</summary>
+        private void RPC_Habit(long sender, string taskString)
+        {
+            if (!IsOwner || !CasualWatch) return;
+            var task = LaborTask.Parse(taskString);
+            if (task.Sink.Kind != EndpointKind.ToPlayer) // helping you forage is a one-off, not a habit
+            {
+                var habits = Habits;
+                habits.RemoveAll(t => t.Corrects(task));
+                habits.Add(task);
+                while (habits.Count > 3) habits.RemoveAt(0);
+                Zdo.Set(ZHabits, LaborTask.SerializeJob(habits));
+            }
+            Event("habit", $"task=\"{task}\"");
+            NView.InvokeRPC(ZRoutedRpc.Everybody, "GL_Burst");
+            SetState(Job.Count > 0 ? GreenlingState.Working : GreenlingState.Idle, "picked_up_chore");
+            Brain.StartChore("habit", task);
         }
 
         private void RPC_Dismiss(long sender)
         {
             if (!IsOwner || State != GreenlingState.Watching) return;
-            if (Task != null) Event("forgot", $"task=\"{Task}\"");
+            if (Job.Count > 0) Event("forgot", $"job=\"{string.Join(" ; ", Job)}\"");
             Zdo.Set(ZTask, "");
             SetState(GreenlingState.Idle, "dismissed");
         }
 
-        /// <summary>Refused pat: swipe at the hand (no damage) and grumble. Sent to everybody.</summary>
-        private void RPC_Swat(long sender)
+        /// <summary>Handed a tool (a hammer to repair with, a cultivator to plant with).</summary>
+        private void RPC_Tool(long sender, string item)
         {
-            if (IsOwner) Character.m_zanim.SetTrigger("attack"); // synced animation, owner drives it
-            Effects.Sound("sfx_greyling_alerted", Character.GetCenterPoint());
+            if (!IsOwner) return;
+            if (Tool.Length > 0) Prank.Drop(transform.position + transform.forward * 0.5f + Vector3.up, Tool, 1);
+            Zdo.Set(ZTool, item);
+            Event("tool", "item=" + item);
         }
 
         /// <summary>Burst of understanding, played on every client.</summary>
@@ -269,6 +416,7 @@ namespace Greenlings
 
         private void Refresh()
         {
+            if (!IsGreenling && Tameable) Tameable.m_tamingTime = Plugin.TamingTime.Value; // config changes apply to wild ones live
             // greenlings tamed before traits existed get theirs now
             if (IsGreenling && IsOwner && TraitList.Length == 0) Zdo.Set(ZTraits, Traits.Roll());
 
@@ -276,7 +424,7 @@ namespace Greenlings
             var stray = IsStray;
             if (_wasStray && !stray && IsGreenling && Player.m_localPlayer
                 && Vector3.Distance(Player.m_localPlayer.transform.position, transform.position) < 25f)
-                Player.m_localPlayer.Message(MessageHud.MessageType.Center, $"{GetName()} trusts you now. Pat it to teach it something.");
+                Player.m_localPlayer.Message(MessageHud.MessageType.Center, $"{GetName()} trusts you now. Give it a coin to teach it something.");
             _wasStray = stray;
 
             var green = Greenness;
@@ -295,7 +443,7 @@ namespace Greenlings
             }
         }
 
-        [HarmonyLib.HarmonyPatch(typeof(Tameable), nameof(Tameable.Tame))]
+        [HarmonyPatch(typeof(Tameable), nameof(Tameable.Tame))]
         private static class TamedEvent
         {
             private static void Postfix(Tameable __instance)
@@ -304,22 +452,36 @@ namespace Greenlings
                 // a new stray: no trust yet, and a name of its own
                 g.Zdo.Set(ZBond, Plugin.StartBond.Value);
                 g.Zdo.Set(ZTraits, Traits.Roll());
-                g.Zdo.Set(ZLastFed, ZNet.instance.GetTime().Ticks);
                 if (__instance.GetText().Length == 0) __instance.SetText(Names.Generate());
                 g.Event("tamed", $"name={__instance.GetText()} bond={g.Bond:0} traits={g.TraitList}");
             }
         }
 
-        public string MoodWord()
+        /// <summary>Whatever it was carrying (and its hammer) falls to the ground when it dies.</summary>
+        [HarmonyPatch(typeof(Character), "OnDeath")]
+        private static class DropOnDeath
         {
+            private static void Prefix(Character __instance)
+            {
+                if (!(__instance.GetComponent<Greenling>() is Greenling g) || !g.IsGreenling || !g.IsOwner) return;
+                var at = g.transform.position + Vector3.up;
+                if (g.CarryCount > 0) Prank.Drop(at, g.CarryItem, g.CarryCount);
+                if (g.Tool.Length > 0) Prank.Drop(at, g.Tool, 1);
+                g.Event("died", $"dropped={g.CarryItem}x{g.CarryCount} tool={g.Tool}");
+            }
+        }
+
+        /// <summary>A short "how is it doing" for the hover text.</summary>
+        public string Status()
+        {
+            if (Scared) return "frightened";
             if (IsStray) return $"stray, trust {Bond:0}%";
+            if (State == GreenlingState.Watching) return CasualWatch ? "watching you curiously" : "watching you closely";
+            var follow = FollowTarget;
+            if (follow) return "following you";
+            var doing = Brain.Doing();
             var needs = Needs.Describe(this);
-            if (needs.Length > 0) return needs;
-            var c = Curiosity;
-            if (c >= 80) return "eager";
-            if (c >= Plugin.LearnThreshold.Value) return "curious";
-            if (c >= 25) return "bored";
-            return "sulky";
+            return needs.Length > 0 ? $"{doing}, {needs}" : doing;
         }
     }
 }

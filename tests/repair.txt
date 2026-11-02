@@ -1,0 +1,15 @@
+# Give a greenling a hammer and it fixes worn pieces nearby now and then.
+!include _setup.txt
+gldev_place woodwall 3 5
+!include _tamed.txt
+gldev_damage woodwall 0.4
+gldev_give Hammer 1
+gldev_useitem Hammer
+!waitfor GLEVT\] tool .*item=Hammer 3
+gldev_cfg greenlings Labor ChoreChance 1
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+!waitfor GLEVT\] repair .*piece=woodwall 40
+gldev_cfg greenlings Labor ChoreChance 0.05
+gldev_cfg greenlings Mischief Chance 0.015
+gldev_cfg greenlings Teaching NaturalCuriosity 0.012

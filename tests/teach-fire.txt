@@ -11,5 +11,5 @@ gldev_close
 gldev_use fire_pit Wood
 !waitfor GLEVT\] learned .*Wood: Container:piece_chest_wood#\d+ -> FireFuel:fire_pit 3
 !waitfor GLEVT\] deposit .*item=Wood to=FireFuel 40
-!waitfor GLEVT\] wait .*reason=(source_empty|sink_full) 60
+!waitfor GLEVT\] wait .*reason=(source_empty|sink_full|no_work) 60
 gl_dump

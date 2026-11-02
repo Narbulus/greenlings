@@ -8,3 +8,10 @@ dist/
 tools/*/bin/
 tools/*/obj/
 .work/
+
+# local API keys (never commit)
+secrets.txt
+
+# wiki build
+.venv-docs/
+site/

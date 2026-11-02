@@ -1,6 +1,7 @@
 # Real taming: coins on the ground, a calm greyling eats them and becomes a greenling.
-# (the dev profile sets Taming.TamingTime = 20 so this is quick)
 !include _setup.txt
+# quick taming for the test
+gldev_cfg greenlings Taming TamingTime 20
 gldev_move 0 10
 spawn Greyling 1
 spawn Coins 3
@@ -8,5 +9,5 @@ gldev_move 0 -6
 !waitfor GLEVT\] ate .*item=Coins 40
 !waitfor GLEVT\] tamed 60
 !wait 1.5
-gl_dump 15
+gl_dump 30
 !waitfor GLDUMP\] \{"type":"greenling".*"state":"Idle" 2

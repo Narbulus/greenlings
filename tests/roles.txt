@@ -18,7 +18,6 @@ gldev_tame
 gldev_bond 100
 !wait 1
 gldev_useitem Coins
-gldev_pat
 !waitfor GLEVT\] state .*to=Watching 3
 gldev_open piece_chest_wood
 !wait 0.5

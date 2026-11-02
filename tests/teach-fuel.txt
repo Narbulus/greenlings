@@ -3,7 +3,7 @@
 gldev_place piece_chest_wood -3 4
 gldev_place smelter 4 6
 gldev_fill piece_chest_wood Coal 4
-!include _watching.txt
+!include _watching_dwarf.txt
 gldev_open piece_chest_wood
 !wait 0.5
 gldev_take Coal 1
@@ -11,5 +11,5 @@ gldev_close
 gldev_addfuel smelter
 !waitfor GLEVT\] learned .*Coal: Container:piece_chest_wood#\d+ -> SmelterFuel:smelter 3
 !waitfor GLEVT\] deposit .*item=Coal 40
-!waitfor GLEVT\] wait .*reason=source_empty 60
+!waitfor GLEVT\] wait .*reason=(source_empty|no_work) 60
 gl_dump

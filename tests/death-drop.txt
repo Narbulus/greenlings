@@ -1,0 +1,11 @@
+# A greenling that dies drops what it was holding, and its hammer.
+!include _setup.txt
+!include _tamed.txt
+gldev_give Hammer 1
+gldev_useitem Hammer
+!waitfor GLEVT\] tool .*item=Hammer 3
+gldev_kill
+!waitfor GLEVT\] died .*tool=Hammer 3
+!wait 1.5
+gl_dump 10
+!waitfor GLDUMP\] \{"type":"drops".*Hammer 2

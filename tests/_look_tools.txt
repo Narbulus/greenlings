@@ -1,0 +1,51 @@
+# Visual check (not in the suite): tools in hand on each rig.
+!include _setup.txt
+tod 0.5
+# a clear stage: tilled ground has no grass, and shrubs out of the way
+gldev_cultivate 0 4 10 10
+gldev_remove Beech_small1 20
+gldev_remove Beech_small2 20
+gldev_remove Bush01 20
+gldev_remove Bush02_en 20
+gldev_remove shrub_2 20
+gldev_remove Bush01_heath 20
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_cfg greenlings Needs RestChance 0
+gldev_cfg greenlings Shamans SootheChance 0
+gldev_give Cultivator 1
+gldev_give Hammer 2
+gldev_place Greydwarf_Shaman 0 4
+gldev_tame
+gldev_bond 100
+!wait 1.5
+gldev_useitem Cultivator
+gldev_place Greyling -3 4
+gldev_tame
+gldev_bond 100
+!wait 1.5
+gldev_useitem Hammer
+gldev_place Greydwarf 3 4
+gldev_tame
+gldev_bond 100
+!wait 1.5
+gldev_useitem Hammer
+!waitfor GLEVT\] tool_model .*item=Cultivator 5
+!wait 2
+gldev_cam Greydwarf_Shaman 1.6 60 0.3 r_hand
+!wait 0.5
+!screenshot tool_shaman_hand_a
+gldev_cam Greydwarf_Shaman 1.6 -30 0.3 r_hand
+!wait 0.5
+!screenshot tool_shaman_hand_b
+gldev_cam Greydwarf_Shaman 4 70 0.6
+!wait 0.5
+!screenshot tool_shaman_full
+gldev_cam Greyling 1.0 60 0.2 r_hand
+!wait 0.5
+!screenshot tool_greyling_hand
+gldev_cam Greydwarf 1.4 60 0.3 r_hand
+!wait 0.5
+!screenshot tool_greydwarf_hand
+gldev_cam off

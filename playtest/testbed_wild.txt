@@ -2,4 +2,5 @@
 # Taming: drop coins near one and stay out of sight (sneak or hide behind something); try `ghost` to cheat.
 gldev_place Greyling -3 25
 gldev_place Greyling 3 27
-gldev_say Two wild greylings 25m ahead. Drop coins near them and keep your distance.
+gldev_place Greydwarf_Shaman 0 32
+gldev_say Two wild greylings and a shaman 25-30m ahead. Drop coins near the greylings (thistle for the shaman) and keep your distance.

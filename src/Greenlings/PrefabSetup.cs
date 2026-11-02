@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using UnityEngine;
 
@@ -15,37 +16,47 @@ namespace Greenlings
         private static void Postfix(ZNetScene __instance)
         {
             var boar = __instance.GetPrefab("Boar");
-            var tameItem = __instance.GetPrefab(Plugin.TameItem.Value)?.GetComponent<ItemDrop>();
-            if (!boar || !tameItem)
+            if (!boar)
             {
-                Plugin.Log.LogError($"prefab setup failed (Boar={boar}, {Plugin.TameItem.Value}={tameItem})");
+                Plugin.Log.LogError("prefab setup failed (no Boar prefab to copy taming from)");
                 return;
             }
             foreach (var name in Roles.TameablePrefabs)
             {
                 var prefab = __instance.GetPrefab(name);
-                if (prefab) MakeTameable(prefab, boar.GetComponent<Tameable>(), tameItem);
-                else Plugin.Log.LogWarning("missing prefab " + name);
+                if (!prefab) { Plugin.Log.LogWarning("missing prefab " + name); continue; }
+                var role = Roles.Of(prefab);
+                var items = (role == Role.Brute ? Plugin.BruteTameItems.Value : role == Role.Shaman ? Plugin.ShamanTameItems.Value : Plugin.TameItem.Value)
+                    .Split(',').Select(s => __instance.GetPrefab(s.Trim())?.GetComponent<ItemDrop>()).Where(d => d).ToList();
+                if (items.Count == 0) { Plugin.Log.LogError($"no taming items found for {name}"); continue; }
+                MakeTameable(prefab, boar.GetComponent<Tameable>(), items);
             }
         }
 
-        private static void MakeTameable(GameObject greyling, Tameable boarTame, ItemDrop tameItem)
+        /// <summary>The boar's effects without the boar noises, plus the greyling's own little chirp.</summary>
+        private static EffectList Quiet(EffectList boar, EffectList own)
+        {
+            var visuals = boar.m_effectPrefabs.Where(e => e.m_prefab && !e.m_prefab.GetComponentInChildren<AudioSource>(true) && !e.m_prefab.GetComponentInChildren<ZSFX>(true));
+            return new EffectList { m_effectPrefabs = visuals.Concat(own?.m_effectPrefabs ?? new EffectList.EffectData[0]).ToArray() };
+        }
+
+        private static void MakeTameable(GameObject greyling, Tameable boarTame, List<ItemDrop> tameItems)
         {
             var tame = greyling.GetComponent<Tameable>() ?? greyling.AddComponent<Tameable>();
             tame.m_tamingTime = Plugin.TamingTime.Value;
             tame.m_fedDuration = Plugin.FedDuration.Value;
             tame.m_commandable = false; // E is Pat (see Interaction)
-            tame.m_tamedEffect = boarTame.m_tamedEffect;
-            tame.m_sootheEffect = boarTame.m_sootheEffect;
-            tame.m_petEffect = boarTame.m_petEffect;
-
             var ai = greyling.GetComponent<MonsterAI>();
-            ai.m_consumeItems = new List<ItemDrop> { tameItem };
+            tame.m_tamedEffect = boarTame.m_tamedEffect;
+            tame.m_sootheEffect = Quiet(boarTame.m_sootheEffect, ai.m_idleSound);
+            tame.m_petEffect = Quiet(boarTame.m_petEffect, ai.m_idleSound);
+
+            ai.m_consumeItems = tameItems;
             ai.m_consumeSearchRange = Plugin.CoinSearchRange.Value; // greedy for shiny things (boars: 5m)
 
             if (!greyling.GetComponent<Greenling>()) greyling.AddComponent<Greenling>();
             if (!greyling.GetComponent<CarryVisual>()) greyling.AddComponent<CarryVisual>();
-            Plugin.Log.LogInfo($"{greyling.name} is now tameable with {tameItem.name} ({tame.m_tamingTime}s, fed {tame.m_fedDuration}s per item)");
+            Plugin.Log.LogInfo($"{greyling.name} is now tameable with {string.Join("/", tameItems.Select(i => i.name))} ({tame.m_tamingTime}s, fed {tame.m_fedDuration}s per item)");
         }
     }
 }

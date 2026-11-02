@@ -3,14 +3,13 @@
 gldev_place piece_chest_wood -3 4
 gldev_place fermenter 4 6
 gldev_fill piece_chest_wood MeadBaseHealthMinor 3
-!include _watching.txt
+!include _watching_dwarf.txt
 gldev_open piece_chest_wood
 !wait 0.5
 gldev_take MeadBaseHealthMinor 1
 gldev_close
 gldev_use fermenter MeadBaseHealthMinor
 !waitfor GLEVT\] learned .*MeadBaseHealthMinor: Container:piece_chest_wood#\d+ -> FermenterAdd:fermenter 3
-# the fermenter is busy now, so the greenling brings the rest and waits
-!waitfor GLEVT\] take .*item=MeadBaseHealthMinor 30
-!waitfor GLEVT\] wait .*reason=sink_full 40
+# the fermenter is busy now: nowhere to put more, so it doesn't fetch any and waits
+!waitfor GLEVT\] wait .*reason=(sink_full|no_work|nowhere_to_put_it) 40
 gl_dump

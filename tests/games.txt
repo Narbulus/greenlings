@@ -1,0 +1,27 @@
+# Greenlings play together: tag, and a huddle (standing in a ring, nattering).
+!include _setup.txt
+gldev_cfg greenlings Mischief Chance 0
+gldev_cfg greenlings Labor ChoreChance 0
+gldev_cfg greenlings Teaching NaturalCuriosity 0
+gldev_place Greyling -2 4
+gldev_tame
+gldev_bond 100
+gldev_place Greyling 0 5
+gldev_tame
+gldev_bond 100
+gldev_place Greyling 2 4
+gldev_tame
+gldev_bond 100
+!wait 2
+gl_prank tag
+!waitfor GLEVT\] mischief .*kind=tag target= 3
+!waitfor GLEVT\] mischief .*kind=tag .*because=tag 3
+!waitfor GLEVT\] mischief_done .*kind=tag 25
+!waitfor GLEVT\] mischief_done .*kind=tag 5
+!wait 1
+gl_prank huddle
+!waitfor GLEVT\] mischief .*kind=huddle .*because=huddle 3
+!waitfor GLEVT\] mischief_done .*kind=huddle 30
+gldev_cfg greenlings Mischief Chance 0.015
+gldev_cfg greenlings Labor ChoreChance 0.05
+gldev_cfg greenlings Teaching NaturalCuriosity 0.012

@@ -1,4 +1,5 @@
-gldev_say Strays: feed them berries/mushrooms/honey (hotbar), pat them (E, 45s cooldown), stay near. At 100% trust they turn fully green and can learn.
-gldev_say Teach: give a coin (hotbar) until curious, press E, then show a job: take from somewhere, put somewhere else.
-gldev_say Jobs: chest->chest, chest->smelter/kiln/hearth/cooking/fermenter, beehive/bushes/ground->chest. E again while it watches = forget job.
-gldev_say Useful: gl_dump (state to log), gl_prank (force mischief), gldev_run testbed_wild (wild greylings), gldev_run testbed (reset).
+gldev_say Strays: feed them (hand or ground), pat them (E, 30s cooldown), stay near. They tag along after a treat. At 100% trust they can learn.
+gldev_say Teach: use a coin on it, then show a job: take from somewhere, put somewhere else. Show another step within a minute for a 2-step job.
+gldev_say E on a trusting one: follow me / stay. E while it watches = forget its job. Hammer = fixes worn pieces (they fetch one from a chest if a piece is worn).
+gldev_say Shamans: heal hurt pets, soothe strays, and plant. Coin it, take seeds from the chest, plant a couple on the tilled strip (back right): it fills the strip in rows. Needs a cultivator (one is in the chest).
+gldev_say Jobs: chest->chest, chest->smelter/kiln/hearth/torch/cooking/fermenter, beehive/bushes/ground->chest, chest->ground (feeding spot).

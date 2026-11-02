@@ -5,7 +5,7 @@ gldev_place piece_chest 5 8
 gldev_place smelter -6 10
 gldev_fill piece_chest_wood Wood 50
 gldev_fill piece_chest_wood CopperOre 20
-!include _watching.txt
+!include _watching_dwarf.txt
 # job 1: wood chest -> chest
 gldev_open piece_chest_wood
 !wait 0.5
@@ -19,9 +19,7 @@ gldev_close
 !waitfor GLEVT\] take .*item=Wood 30
 # re-teach while it works: copper ore -> smelter
 gldev_useitem Coins
-gldev_pat
 !waitfor GLEVT\] state .*from=Working to=Watching 3
-!waitfor GLEVT\] drop .*item=Wood .*reason=state change 3
 gldev_open piece_chest_wood
 !wait 0.5
 gldev_take CopperOre 1
@@ -29,9 +27,8 @@ gldev_close
 gldev_addore smelter CopperOre
 !waitfor GLEVT\] learned .*CopperOre: Container:piece_chest_wood#\d+ -> SmelterOre:smelter 3
 !waitfor GLEVT\] take .*item=CopperOre 30
-# and forget it again: pat to watch, pat again to dismiss
+# and forget it again: a coin to get its attention, a pat to say never mind
 gldev_useitem Coins
-gldev_pat
 !waitfor GLEVT\] state .*to=Watching 3
 gldev_pat
 !waitfor GLEVT\] forgot .*CopperOre 3

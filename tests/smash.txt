@@ -10,7 +10,6 @@ gldev_tame
 gldev_bond 100
 gldev_give Coins 5
 gldev_useitem Coins
-gldev_pat
 !waitfor GLEVT\] state .*to=Watching 3
 # show it: smash a bush, pick up the wood, put it in the chest
 gldev_hit Bush01 3
@@ -37,7 +36,6 @@ gldev_tame
 gldev_bond 100
 gldev_give Coins 5
 gldev_useitem Coins
-gldev_pat
 !waitfor GLEVT\] state .*to=Watching 3
 gldev_hit beech_log 1
 !waitfor GLEVT\] learned .*smash: BreakArea:log 3
