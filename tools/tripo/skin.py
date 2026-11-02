@@ -7,12 +7,17 @@ Prepare a baked skin texture for Valheim's Custom/Creature shader.
 The creature material adjusts colour in the shader (greyling: _Hue=-0.03, _Saturation=0.121, see
 gldev_export), which is why vanilla skin textures look dull on disk. A generated texture is already
 "finished", so we undo that shift here: hue moved back, saturation taken off, and the shader puts it
-back in game. --grade pulls the colour statistics part of the way toward a vanilla texture.
+back in game. --grade pulls the colour statistics part of the way toward a vanilla texture (use the
+vanilla texture of the creature the skin is for: tools/tripo exports from gldev_photo).
+
+The baked texture's unused space between UV islands is black; the game's mipmaps blend that into the
+island edges, which darkens the model at a distance and outlines every seam. pad() fills it with the
+nearest island colour first.
 """
 import argparse
 import colorsys
 
-from PIL import Image
+from PIL import Image, ImageFilter, ImageMath
 
 
 def stats(im):
@@ -21,6 +26,29 @@ def stats(im):
     m = [sum(p[i] for p in px) / n for i in range(3)]
     s = [(sum((p[i] - m[i]) ** 2 for p in px) / n) ** 0.5 for i in range(3)]
     return m, s
+
+
+def pad(im, empty=6, rim=2):
+    """Fill the empty (near-black) texels with the colour of the nearest island: push-pull over a
+    pyramid of box-filtered levels, each texel taking the finest level that has coverage there.
+    The outermost `rim` texels of each island are replaced too: downscaling the bake already
+    blended them with the black."""
+    mask = im.convert("L").point(lambda v: 255 if v > empty else 0)
+    for _ in range(rim):
+        mask = mask.filter(ImageFilter.MinFilter(3))
+    levels = [(im, mask)]
+    while levels[-1][0].width > 1:
+        pm, m = levels[-1]
+        w, h = max(1, pm.width // 2), max(1, pm.height // 2)
+        premul = Image.composite(pm, Image.new("RGB", pm.size), m).resize((w, h), Image.BOX)
+        cover = m.resize((w, h), Image.BOX)
+        chans = [ImageMath.lambda_eval(lambda e: e["convert"](e["min"](e["c"] * 255 / e["max"](e["k"], 1), 255), "L"),
+                                       c=c, k=cover) for c in premul.split()]
+        levels.append((Image.merge("RGB", chans), cover.point(lambda v: 255 if v > 0 else 0)))
+    filled = levels[-1][0]
+    for pm, m in reversed(levels[:-1]):
+        filled = Image.composite(pm, filled.resize(pm.size, Image.BILINEAR), m)
+    return filled
 
 
 def main():
@@ -33,7 +61,7 @@ def main():
     ap.add_argument("--sat", type=float, default=0.121)
     a = ap.parse_args()
 
-    im = Image.open(a.src).convert("RGB")
+    im = pad(Image.open(a.src).convert("RGB"))
     if a.vanilla and a.grade > 0:
         mv, sv = stats(Image.open(a.vanilla).convert("RGBA"))
         mg, sg = stats(im)

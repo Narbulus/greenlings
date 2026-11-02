@@ -456,7 +456,7 @@ def rebake(o, rig, fit_rig, high, out_png, size=256):
     tmp.matrix_world = o.matrix_world.copy()
     for c in o.users_collection:
         c.objects.link(tmp)
-    gt.bake_texture(high, tmp, out_png, size)
+    gt.bake_texture(high, tmp, out_png, size, bake_size=max(1024, size * 2))
     src = tmp.data.uv_layers.active.data
     dst = o.data.uv_layers.active.data
     for i in range(len(dst)):
@@ -541,26 +541,37 @@ def slim_legs(o, rig, factor=0.75, bones=("leg1", "leg2")):
     return moved
 
 
-def face_to_head(o, eyes, inner=0.13, outer=0.24):
+def face_to_head(o, eyes, inner=0.13, outer=0.24, depth=0.08):
     """
     The face (eyes, beak) rides the head bone, like the vanilla greyling's, so it turns with the
-    head and the glowing eye quads (skinned to the head) stay on it. Heat weights give the face
-    only ~10% head. Full head weight within `inner` of the face centre (between and just below the
-    eyes), fading to the existing weights at `outer`.
+    head and the glowing eye quads (skinned to the head) stay on it; nothing else does. Heat weights
+    give the face only ~10% head and sprinkle head weight over the shell around and above it, so
+    shell pieces turned with the head and slid over the rest. Full head weight within `inner` of
+    the face centre (between and just below the eyes), fading out at `outer`, and only in front of
+    the shell (no further back than `depth` behind the eyes); everywhere else head weight moves to
+    spine3.
     """
     c = sum((Vector(p) for p in eyes.values()), Vector()) / len(eyes) + Vector((0, -0.02, -0.06))
+    back = max(p[1] for p in eyes.values()) + depth
     head = o.vertex_groups["head"].index
+    sp3 = o.vertex_groups["spine3"].index
     M = o.matrix_world
     n = 0
     for v in o.data.vertices:
-        d = (M @ v.co - c).length
-        if d >= outer:
-            continue
-        t = 1.0 if d <= inner else (outer - d) / (outer - inner)
+        p = M @ v.co
+        d = (p - c).length
+        t = 0.0 if d >= outer or p.y > back else 1.0 if d <= inner else (outer - d) / (outer - inner)
         old = {g.group: g.weight for g in v.groups}
+        h = old.pop(head, 0.0)
+        if t == 0.0 and h == 0.0:
+            continue
+        if t == 0.0:   # stray head weight on the shell or body: give it to the torso
+            o.vertex_groups[head].remove([v.index])
+            o.vertex_groups[sp3].add([v.index], old.get(sp3, 0.0) + h, "REPLACE")
+            continue
         for k, w in old.items():
             o.vertex_groups[k].add([v.index], w * (1 - t), "REPLACE")
-        o.vertex_groups[head].add([v.index], old.get(head, 0.0) * (1 - t) + t, "REPLACE")
+        o.vertex_groups[head].add([v.index], h * (1 - t) + t, "REPLACE")
         n += 1
     return n
 
@@ -757,7 +768,7 @@ def rigid_beyond_hand(o, side, start=0.78):
     return len(ids)
 
 
-def build(glb, name, work_dir, template_json, tris=3000, max_stretch=60, clean_max=12):
+def build(glb, name, work_dir, template_json, tris=3000, max_stretch=60, clean_max=12, tex_size=256):
     """
     Generated model -> rigged game mesh, no hand tuning. Writes <work_dir>/<name>.glmesh and
     tex256.png (run tools/tripo/skin.py on it for the game). Returns a report; report["ok"] is
@@ -790,7 +801,7 @@ def build(glb, name, work_dir, template_json, tris=3000, max_stretch=60, clean_m
         rep["held_rigid"] = rigid_beyond_hand(g, held)
     # heat weights let the arm bones claim the shoulder caps and hump: keep the arm to its own skin,
     # then cut it free of the body (no web between shell and arm), cap both openings, slim the legs
-    rep["arm_tube"] = arm_tube(g, rig)
+    rep["arm_tube"] = arm_tube(g, rig, radius=0.1, keep_reach=0.1)  # strict: shell just above the arm is not arm
     rep["arm_seam"] = separate_arms(g)
     rep["fragments"] = drop_fragments(g)
     rep["legs_slimmed"] = slim_legs(g, rig)
@@ -798,8 +809,8 @@ def build(glb, name, work_dir, template_json, tris=3000, max_stretch=60, clean_m
     fill_holes(g, max_sides=64, image=img)
     fix_winding(g)
     # caps and cuts get real texture: new UVs baked from the generated model
-    png_final = os.path.join(work_dir, "tex256_final.png")
-    rebake(g, rig, bpy.data.objects[RIG + "_fit"], high, png_final)
+    png_final = os.path.join(work_dir, "tex_final.png")
+    rebake(g, rig, bpy.data.objects[RIG + "_fit"], high, png_final, size=tex_size)
     high.hide_set(True)
     img = bpy.data.images.load(png_final, check_existing=False)
     next(x for x in g.data.materials[0].node_tree.nodes if x.type == "TEX_IMAGE").image = img
@@ -838,3 +849,72 @@ def export_for(coll_name, prefab, template_json, out_json):
         for o in objs:
             o.matrix_world = saved[o.name]
         bpy.context.view_layer.update()
+
+
+# ---------------------------------------------------------------- debug views
+
+BONE_COLOURS = {
+    "head": (1, 0.1, 0.1), "spine3": (0.1, 0.8, 0.1), "spine2": (0.1, 0.5, 0.3), "spine1": (0.2, 0.3, 0.2), "root": (0.3, 0.3, 0.3),
+    "l_shoulder": (1, 0.6, 0), "r_shoulder": (0.6, 0.3, 0), "l_arm1": (0.2, 0.4, 1), "r_arm1": (0.6, 0.2, 1),
+    "l_arm2": (0.3, 0.8, 1), "r_arm2": (1, 0.3, 0.8), "l_hand": (0, 1, 1), "r_hand": (1, 0, 1),
+    "l_leg1": (1, 1, 0), "r_leg1": (0.7, 0.7, 0), "l_leg2": (0.9, 0.9, 0.5), "r_leg2": (0.6, 0.6, 0.3),
+}
+
+
+def bone_colour_render(o, out_prefix, shots, cam_name="PreviewCam"):
+    """
+    Render `o` coloured by the bone that drives each vertex (paler where it is split between
+    bones), posed per shot: shots = [(pose {bone: (x, y, z) degrees}, yaw, ortho_scale, look_z)].
+    Shows weights that leak between parts (shell on the arm, shell on the head) at a glance.
+    """
+    import math
+    rig = bpy.data.objects[RIG]
+    names = {g.index: g.name for g in o.vertex_groups}
+    dbg = bpy.data.objects.get("DBG")
+    if dbg:
+        bpy.data.objects.remove(dbg, do_unlink=True)
+    dbg = o.copy()
+    dbg.data = o.data.copy()
+    dbg.name = "DBG"
+    bpy.context.scene.collection.objects.link(dbg)
+    ca = dbg.data.color_attributes.new("bone", "FLOAT_COLOR", "POINT")
+    for v in dbg.data.vertices:
+        c = (1, 1, 1)
+        if v.groups:
+            top = max(v.groups, key=lambda x: x.weight)
+            base = BONE_COLOURS.get(names[top.group], (0.8, 0.8, 0.8))
+            c = tuple(ci * top.weight + 0.9 * (1 - top.weight) for ci in base)
+        ca.data[v.index].color = (*c, 1)
+    dbg.data.color_attributes.active_color = ca
+    sc = bpy.context.scene
+    cam = bpy.data.objects[cam_name]
+    sh = sc.display.shading
+    old = sh.color_type
+    sh.color_type = "VERTEX"
+    objs = [x for x in sc.objects if x.type == "MESH"]
+    saved = {x.name: x.hide_render for x in objs}
+    for x in objs:
+        x.hide_render = x is not dbg
+    paths = []
+    try:
+        for k, (pose, yaw, scale, look_z) in enumerate(shots):
+            for pb in rig.pose.bones:
+                pb.rotation_mode = "XYZ"
+                pb.rotation_euler = (0, 0, 0)
+            for b, e in pose.items():
+                rig.pose.bones[b].rotation_euler = tuple(math.radians(a) for a in e)
+            cam.data.ortho_scale = scale
+            a = math.radians(yaw)
+            cam.location = Vector((-math.sin(a) * 4, -math.cos(a) * 4, look_z + 0.6))
+            cam.rotation_euler = (Vector((0, 0, look_z)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+            sc.render.filepath = f"{out_prefix}_{k}.png"
+            bpy.ops.render.render(write_still=True)
+            paths.append(sc.render.filepath)
+    finally:
+        for pb in rig.pose.bones:
+            pb.rotation_euler = (0, 0, 0)
+        sh.color_type = old
+        for x in objs:
+            x.hide_render = saved.get(x.name, x.hide_render)
+        bpy.data.objects.remove(dbg, do_unlink=True)
+    return paths
