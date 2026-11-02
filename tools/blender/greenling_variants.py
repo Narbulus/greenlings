@@ -53,14 +53,37 @@ def weight_fix(o, rig):
         g.remove(top + skirt)
     o.vertex_groups["spine3"].add(top, 1.0, "REPLACE")
     o.vertex_groups["spine1"].add(skirt, 1.0, "REPLACE")
-    o["weight_fix"] = {"spine3": len(top), "spine1": len(skirt), "arm_bleed": arm_bleed(o, rig)}
+    o["weight_fix"] = {"spine3": len(top), "spine1": len(skirt), "sides": own_side(o), "arm_bleed": arm_bleed(o, rig)}
 
 
-def arm_bleed(o, rig, reach=0.1):
+def own_side(o, margin=0.04):
+    """
+    Both shoulder bones start at the same point, so heat weights hand some left-shoulder vertices to
+    r_shoulder (and the reverse); those then follow the other arm and stretch across the chest.
+    Vertices clearly on one side (|x| > margin) move any other-side weight to their own side's twin.
+    """
+    names = {g.index: g.name for g in o.vertex_groups}
+    moved = 0
+    for v in o.data.vertices:
+        x = (o.matrix_world @ v.co).x
+        if abs(x) <= margin:
+            continue
+        own, other = ("l_", "r_") if x > 0 else ("r_", "l_")
+        # copy out first: editing groups invalidates the vertex's group elements
+        for name, w in [(names[g.group], g.weight) for g in v.groups if names[g.group].startswith(other) and g.weight > 0]:
+            o.vertex_groups[name].remove([v.index])
+            o.vertex_groups[own + name[2:]].add([v.index], w, "ADD")
+            moved += 1
+    return moved
+
+
+def arm_bleed(o, rig, reach=0.18, keep=0.6):
     """
     Heat weights let the arm bones claim leaves and torso hanging beside the arm, which then stretch
     into long strips from shoulder to elbow when the arm swings. Anything further than `reach` from
-    the arm's bone segments loses its shoulder/arm weight to spine3 (the vanilla torso bone).
+    the arm's bone segments loses its shoulder/arm weight to spine3 (the vanilla torso bone), unless
+    the arm already owns most of it (weight >= `keep`): those are arm surface, and cutting them loose
+    turns the long triangles of a low-poly arm into sails from shoulder to elbow.
     """
     from mathutils.geometry import intersect_point_line
     H = {b.name: rig.matrix_world @ b.head_local for b in rig.data.bones}
@@ -76,9 +99,9 @@ def arm_bleed(o, rig, reach=0.1):
     moved = 0
     for v in o.data.vertices:
         arm = [g for g in v.groups if names[g.group][2:] in ("shoulder", "arm1", "arm2") and g.weight > 0]
-        if not arm or dist(o.matrix_world @ v.co, names[arm[0].group][0]) <= reach:
-            continue
         w = sum(g.weight for g in arm)
+        if not arm or w >= keep or dist(o.matrix_world @ v.co, names[arm[0].group][0]) <= reach:
+            continue
         for g in arm:
             o.vertex_groups[g.group].remove([v.index])
         o.vertex_groups["spine3"].add([v.index], w, "ADD")
