@@ -13,7 +13,8 @@ namespace Greenlings
     /// The new meshes keep the original bone list and bind poses, so the vanilla skeleton and
     /// animations drive them unchanged. Wild greylings keep the vanilla meshes.
     ///
-    /// File: plugins/Greenlings/models/greenling.glmesh (written by tools/blender/greenling_io.py).
+    /// File: plugins/Greenlings/models/greenling.glmesh (written by tools/blender/greenling_io.py),
+    /// plus an optional greenling.png beside it: the remodel's own skin texture, used point-filtered.
     /// </summary>
     public class GreenlingModel : MonoBehaviour
     {
@@ -64,6 +65,8 @@ namespace Greenlings
 
         private static Dictionary<string, Mesh> _meshes = new Dictionary<string, Mesh>();
         private static Dictionary<string, string[]> _boneNames = new Dictionary<string, string[]>();
+        private static Texture2D _texture;
+        private static string _path; // last file loaded; "gl_model reload" reloads it
         internal static bool Enabled = true;
         private static int _version;
 
@@ -71,13 +74,20 @@ namespace Greenlings
         private readonly Dictionary<SkinnedMeshRenderer, (Mesh mesh, Bounds bounds)> _original = new Dictionary<SkinnedMeshRenderer, (Mesh, Bounds)>();
         private int _applied = -1; // model version currently applied, -1 = vanilla
 
+        /// <summary>True while this creature wears the remodel (the tint stays off: it is already green).</summary>
+        internal bool Applied => _applied >= 0;
+
         public static string DefaultPath =>
             Path.Combine(Path.GetDirectoryName(typeof(GreenlingModel).Assembly.Location), "models", "greenling.glmesh");
 
         /// <summary>Load (or reload) the model file. Returns a one-line report.</summary>
         public static string Load(string path = null)
         {
-            path = path ?? DefaultPath;
+            path = path ?? _path ?? DefaultPath;
+            // a bare name picks a variant next to the default file: "gl_model leafy" -> models/leafy.glmesh
+            if (!Path.IsPathRooted(path) && !File.Exists(path))
+                path = Path.Combine(Path.GetDirectoryName(DefaultPath), Path.HasExtension(path) ? path : path + ".glmesh");
+            _path = path;
             if (!File.Exists(path)) { _meshes = new Dictionary<string, Mesh>(); _version++; return "no model file at " + path; }
             var entries = Parse(File.ReadAllText(path));
             if (entries.Count == 0) { _meshes = new Dictionary<string, Mesh>(); _version++; return "model file has no meshes: " + path; }
@@ -112,14 +122,29 @@ namespace Greenlings
                     return m;
                 }).ToArray();
                 mesh.RecalculateBounds();
+                mesh.RecalculateTangents(); // the creature shader is normal mapped
                 meshes[e.renderer] = mesh;
                 bones[e.renderer] = e.bones;
             }
             _meshes = meshes;
             _boneNames = bones;
+            _texture = LoadTexture(Path.ChangeExtension(path, ".png"));
             _version++;
             return $"loaded {meshes.Count} meshes from {Path.GetFileName(path)}: " +
-                   string.Join(", ", meshes.Select(kv => $"{kv.Key} {kv.Value.vertexCount}v"));
+                   string.Join(", ", meshes.Select(kv => $"{kv.Key} {kv.Value.vertexCount}v")) +
+                   (_texture ? $"; texture {_texture.width}x{_texture.height}" : "; vanilla texture");
+        }
+
+        private static Texture2D LoadTexture(string path)
+        {
+            if (!File.Exists(path)) return null;
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, true) { name = "Greenling_skin" };
+            // called by reflection: the compiler otherwise trips over Unity 6's ReadOnlySpan overload on net472
+            var load = typeof(ImageConversion).GetMethod(nameof(ImageConversion.LoadImage), new[] { typeof(Texture2D), typeof(byte[]), typeof(bool) });
+            if (!(bool)load.Invoke(null, new object[] { tex, File.ReadAllBytes(path), false })) return null;
+            tex.filterMode = FilterMode.Point; // the vanilla creatures' crisp low-res look
+            tex.wrapMode = TextureWrapMode.Clamp;
+            return tex;
         }
 
         private void Awake()
@@ -159,7 +184,9 @@ namespace Greenlings
                 var b = _original[smr].bounds;
                 b.Expand(b.size * 0.3f); // rounder body and leaves stick out a bit further
                 smr.localBounds = b;
+                if (IsSkin(smr) && _texture) SetSkin(smr, true);
             }
+            _g.InvalidateTint();
             _g.Event("model", "look=greenling");
         }
 
@@ -170,8 +197,51 @@ namespace Greenlings
                 {
                     kv.Key.sharedMesh = kv.Value.mesh;
                     kv.Key.localBounds = kv.Value.bounds;
+                    if (IsSkin(kv.Key) && _texture) SetSkin(kv.Key, false);
                 }
+            _g.InvalidateTint();
             if (_applied >= 0) _g.Event("model", "look=vanilla");
+        }
+
+        private static bool IsSkin(Renderer r) => r.sharedMaterial && r.sharedMaterial.shader.name == "Custom/Creature"; // not the eyes
+
+        private static Texture2D _flatNormal;
+        private static bool _loggedProps;
+
+        /// <summary>
+        /// Swap in the remodel's skin (or put the vanilla one back). The vanilla maps besides _MainTex
+        /// (normal map etc.) are laid out for the vanilla UVs, so the remodel gets neutral ones instead.
+        /// </summary>
+        private static void SetSkin(Renderer r, bool remodel)
+        {
+            var mat = r.sharedMaterial;
+            var block = new MaterialPropertyBlock();
+            r.GetPropertyBlock(block); // keeps the tint
+            foreach (var name in mat.GetTexturePropertyNames())
+            {
+                var vanilla = mat.GetTexture(name);
+                if (!vanilla) continue;
+                if (!_loggedProps) Plugin.Log.LogInfo($"[GLEVT] model skin_prop name={name} tex={vanilla.name}");
+                Texture tex = vanilla;
+                if (remodel)
+                {
+                    if (name == "_MainTex") tex = _texture;
+                    else if (name.IndexOf("Bump", StringComparison.OrdinalIgnoreCase) >= 0 || name.IndexOf("Normal", StringComparison.OrdinalIgnoreCase) >= 0) tex = FlatNormal();
+                }
+                block.SetTexture(name, tex);
+            }
+            _loggedProps = true;
+            r.SetPropertyBlock(block);
+        }
+
+        private static Texture2D FlatNormal()
+        {
+            if (_flatNormal) return _flatNormal;
+            // (0.5, 0.5, 1) unpacks flat as RGB; alpha 0.5 keeps it flat for the AG (DXT5nm) unpack too
+            _flatNormal = new Texture2D(4, 4, TextureFormat.RGBA32, false, true) { name = "Greenling_flat_normal" };
+            _flatNormal.SetPixels32(Enumerable.Repeat(new Color32(128, 128, 255, 128), 16).ToArray());
+            _flatNormal.Apply();
+            return _flatNormal;
         }
 
         [HarmonyPatch(typeof(ZNetScene), "Awake")]
@@ -199,7 +269,7 @@ namespace Greenlings
         {
             private static void Postfix()
             {
-                new Terminal.ConsoleCommand("gl_model", "[reload|on|off|<path>] greenling remodel: reload the model file, toggle it, or load another file", args =>
+                new Terminal.ConsoleCommand("gl_model", "[reload|on|off|<name>|<path>] greenling remodel: reload the model file, toggle it, or load models/<name>.glmesh or another file", args =>
                 {
                     var arg = args.Length > 1 ? args.FullLine.Substring(args.FullLine.IndexOf(' ') + 1).Trim() : "reload";
                     string report;
