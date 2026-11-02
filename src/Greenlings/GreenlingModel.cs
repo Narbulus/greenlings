@@ -66,7 +66,6 @@ namespace Greenlings
         private static Dictionary<string, Mesh> _meshes = new Dictionary<string, Mesh>();
         private static Dictionary<string, string[]> _boneNames = new Dictionary<string, string[]>();
         private static Texture2D _texture;
-        private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
         internal static bool Enabled = true;
         private static int _version;
 
@@ -118,6 +117,7 @@ namespace Greenlings
                     return m;
                 }).ToArray();
                 mesh.RecalculateBounds();
+                mesh.RecalculateTangents(); // the creature shader is normal mapped
                 meshes[e.renderer] = mesh;
                 bones[e.renderer] = e.bones;
             }
@@ -179,7 +179,7 @@ namespace Greenlings
                 var b = _original[smr].bounds;
                 b.Expand(b.size * 0.3f); // rounder body and leaves stick out a bit further
                 smr.localBounds = b;
-                if (IsSkin(smr)) SetTexture(smr, _texture ? _texture : smr.sharedMaterial.mainTexture);
+                if (IsSkin(smr) && _texture) SetSkin(smr, true);
             }
             _g.InvalidateTint();
             _g.Event("model", "look=greenling");
@@ -192,7 +192,7 @@ namespace Greenlings
                 {
                     kv.Key.sharedMesh = kv.Value.mesh;
                     kv.Key.localBounds = kv.Value.bounds;
-                    if (IsSkin(kv.Key)) SetTexture(kv.Key, kv.Key.sharedMaterial.mainTexture);
+                    if (IsSkin(kv.Key) && _texture) SetSkin(kv.Key, false);
                 }
             _g.InvalidateTint();
             if (_applied >= 0) _g.Event("model", "look=vanilla");
@@ -200,13 +200,43 @@ namespace Greenlings
 
         private static bool IsSkin(Renderer r) => r.sharedMaterial && r.sharedMaterial.shader.name == "Custom/Creature"; // not the eyes
 
-        private static void SetTexture(Renderer r, Texture tex)
+        private static Texture2D _flatNormal;
+        private static bool _loggedProps;
+
+        /// <summary>
+        /// Swap in the remodel's skin (or put the vanilla one back). The vanilla maps besides _MainTex
+        /// (normal map etc.) are laid out for the vanilla UVs, so the remodel gets neutral ones instead.
+        /// </summary>
+        private static void SetSkin(Renderer r, bool remodel)
         {
-            if (!tex) return;
+            var mat = r.sharedMaterial;
             var block = new MaterialPropertyBlock();
             r.GetPropertyBlock(block); // keeps the tint
-            block.SetTexture(MainTexId, tex);
+            foreach (var name in mat.GetTexturePropertyNames())
+            {
+                var vanilla = mat.GetTexture(name);
+                if (!vanilla) continue;
+                if (!_loggedProps) Plugin.Log.LogInfo($"[GLEVT] model skin_prop name={name} tex={vanilla.name}");
+                Texture tex = vanilla;
+                if (remodel)
+                {
+                    if (name == "_MainTex") tex = _texture;
+                    else if (name.IndexOf("Bump", StringComparison.OrdinalIgnoreCase) >= 0 || name.IndexOf("Normal", StringComparison.OrdinalIgnoreCase) >= 0) tex = FlatNormal();
+                }
+                block.SetTexture(name, tex);
+            }
+            _loggedProps = true;
             r.SetPropertyBlock(block);
+        }
+
+        private static Texture2D FlatNormal()
+        {
+            if (_flatNormal) return _flatNormal;
+            // (0.5, 0.5, 1) unpacks flat as RGB; alpha 0.5 keeps it flat for the AG (DXT5nm) unpack too
+            _flatNormal = new Texture2D(4, 4, TextureFormat.RGBA32, false, true) { name = "Greenling_flat_normal" };
+            _flatNormal.SetPixels32(Enumerable.Repeat(new Color32(128, 128, 255, 128), 16).ToArray());
+            _flatNormal.Apply();
+            return _flatNormal;
         }
 
         [HarmonyPatch(typeof(ZNetScene), "Awake")]

@@ -209,6 +209,16 @@ def export_creature(coll_name, json_template, out_path):
             tris.append(tri)
         ev.to_mesh_clear()
 
+        # Unity culls back faces: in game space the winding must agree with the normals the way the
+        # vanilla meshes do (cross(b-a, c-a) along the normal, after the Y/Z swap). Object and
+        # renderer matrices can mirror the winding, so check the result rather than trust them.
+        def agrees(t):
+            a, b, c = (Vector((verts[i].x, verts[i].z, verts[i].y)) for i in t)
+            n = sum((Vector((normals[i].x, normals[i].z, normals[i].y)) for i in t), Vector())
+            return (b - a).cross(c - a).dot(n) > 0
+        if tris and sum(agrees(t) for t in tris) < len(tris) / 2:
+            tris = [[t[0], t[2], t[1]] for t in tris]
+
         flat = lambda vs: [c for v in vs for c in (v.x, v.z, v.y)]  # Blender -> Unity
         out_meshes.append({
             **{k: md[k] for k in ("renderer", "mesh", "rootBone", "materials", "bones", "bindposes")},

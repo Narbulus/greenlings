@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -58,13 +59,46 @@ namespace Greenlings.DevTools
                 sb.Append(string.Join(",", m.boneWeights.Select(w => string.Format(CultureInfo.InvariantCulture, "{0},{1:0.#####},{2},{3:0.#####},{4},{5:0.#####},{6},{7:0.#####}",
                     w.boneIndex0, w.weight0, w.boneIndex1, w.weight1, w.boneIndex2, w.weight2, w.boneIndex3, w.weight3))));
                 sb.Append("]}");
-                report.Append($"{smr.name}: {m.vertexCount}v {m.triangles.Length / 3}t {smr.bones.Length} bones; ");
+                report.Append($"{smr.name}: {m.vertexCount}v {m.triangles.Length / 3}t {smr.bones.Length} bones");
+                // extra vertex streams the shader may read (a remodel has to provide them too)
+                var streams = new List<string>();
+                if (m.colors32.Length > 0) streams.Add($"colors(avg {Avg(m.colors32)})");
+                var uvs = new List<Vector2>();
+                for (var ch = 1; ch < 8; ch++) { m.GetUVs(ch, uvs); if (uvs.Count > 0) streams.Add("uv" + ch); }
+                if (m.tangents.Length > 0) streams.Add("tangents");
+                if (streams.Count > 0) report.Append(" [" + string.Join(" ", streams) + "]");
+                foreach (var mat in smr.sharedMaterials.Where(x => x))
+                {
+                    var sh = mat.shader;
+                    var props = Enumerable.Range(0, sh.GetPropertyCount()).Select(i =>
+                    {
+                        var n = sh.GetPropertyName(i);
+                        switch (sh.GetPropertyType(i))
+                        {
+                            case UnityEngine.Rendering.ShaderPropertyType.Color: return $"{n}={mat.GetColor(n)}";
+                            case UnityEngine.Rendering.ShaderPropertyType.Float:
+                            case UnityEngine.Rendering.ShaderPropertyType.Range: return $"{n}={F(mat.GetFloat(n))}";
+                            case UnityEngine.Rendering.ShaderPropertyType.Texture: return $"{n}={(mat.GetTexture(n) ? mat.GetTexture(n).name : "-")}";
+                            default: return n;
+                        }
+                    });
+                    report.Append($" {{{mat.name}: {string.Join(", ", props)}; keywords {string.Join(" ", mat.shaderKeywords)}}}");
+                }
+                report.Append("; ");
             }
             sb.Append("]}");
             var dir = Path.Combine(BepInEx.Paths.BepInExRootPath, "devtools", "export");
             Directory.CreateDirectory(dir);
             File.WriteAllText(Path.Combine(dir, prefabName + ".json"), sb.ToString());
             return report.ToString();
+        }
+
+        private static string Avg(Color32[] cs)
+        {
+            float r = 0, g = 0, b = 0, a = 0;
+            foreach (var c in cs) { r += c.r; g += c.g; b += c.b; a += c.a; }
+            var n = cs.Length;
+            return $"{r / n:0},{g / n:0},{b / n:0},{a / n:0}";
         }
 
         private static string F(float f) => f.ToString("0.######", CultureInfo.InvariantCulture);
