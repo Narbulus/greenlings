@@ -72,6 +72,56 @@ def decimate(o, tris):
     return sum(len(p.vertices) - 2 for p in o.data.polygons)
 
 
+def decimate_split(o, body_tris, detail_tris, is_detail):
+    """
+    Like decimate(), but small details (is_detail(world_pos) -> bool: mushroom caps, twigs) get their
+    own triangle budget instead of being collapsed along with the large body surfaces. Two passes of
+    a vertex-group-weighted collapse: a vertex group's weight lets collapse act there, and a strong
+    factor all but stops it elsewhere. Returns (body, detail) triangle counts.
+    """
+    def counts():
+        M = o.matrix_world
+        d = b = 0
+        for poly in o.data.polygons:
+            t = len(poly.vertices) - 2
+            if is_detail(M @ poly.center):
+                d += t
+            else:
+                b += t
+        return b, d
+
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    bm.to_mesh(o.data)
+    bm.free()
+    bpy.context.view_layer.objects.active = o
+
+    def collapse(detail, ratio):
+        o.vertex_groups.clear()
+        g = o.vertex_groups.new(name="decimate")
+        g.add([v.index for v in o.data.vertices if is_detail(o.matrix_world @ v.co) == detail], 1.0, "REPLACE")
+        m = o.modifiers.new("Decimate", "DECIMATE")
+        m.ratio = min(1.0, ratio)
+        m.use_collapse_triangulate = True
+        m.vertex_group = g.name
+        m.vertex_group_factor = 10.0
+        bpy.ops.object.modifier_apply(modifier=m.name)
+
+    # the weighting leaks: the body pass also thins the details (and the detail pass the body) and
+    # the targets overshoot, so aim the body high and walk the details down in gentle steps
+    # (mushroom brief: body 1289k/detail 196k -> 1832/966 with body_tris 2300, detail_tris 700)
+    b, d = counts()
+    collapse(False, (body_tris + d) / (b + d))
+    for _ in range(8):
+        b, d = counts()
+        if d <= detail_tris * 1.4:
+            break
+        collapse(True, 0.68 if d < detail_tris * 4 else (b + detail_tris) / (b + d))
+    o.vertex_groups.clear()
+    return counts()
+
+
 def bake_texture(high, low, out_png, size=256, bake_size=1024, margin_px=2):
     """
     Fresh UVs on the low-poly mesh, then bake the generated colour from the full-detail mesh onto
