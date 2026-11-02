@@ -34,6 +34,9 @@ namespace Greenlings
 
         private string _wildName;
         private float _appliedTint = -1f;
+
+        /// <summary>Re-apply the skin tint on the next refresh (the remodel swapped meshes or textures).</summary>
+        internal void InvalidateTint() => _appliedTint = -1f;
         private bool _wasStray;
         private LaborTask _taskCache;
         private string _taskCacheKey;
@@ -285,12 +288,12 @@ namespace Greenlings
 
             Character.m_name = IsGreenling ? DisplayName : _wildName;
             var block = new MaterialPropertyBlock();
+            var remodelled = GetComponent<GreenlingModel>() is GreenlingModel model && model.Applied; // already painted green
             foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
                 if (r.sharedMaterial == null || r.sharedMaterial.shader.name != "Custom/Creature") continue; // skip eyes
-                r.GetPropertyBlock(block);
-                if (green > 0f) block.SetColor(ColorId, Color.Lerp(Color.white, Plugin.TamedTint.Value, green));
-                else block.Clear();
+                r.GetPropertyBlock(block); // keeps the remodel's texture
+                block.SetColor(ColorId, green > 0f && !remodelled ? Color.Lerp(Color.white, Plugin.TamedTint.Value, green) : Color.white);
                 r.SetPropertyBlock(block);
             }
         }

@@ -8,3 +8,4 @@ dist/
 tools/*/bin/
 tools/*/obj/
 .work/
+__pycache__/
