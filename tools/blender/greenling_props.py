@@ -79,50 +79,107 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
     for c in body.users_collection:
         c.objects.link(o)
     o.matrix_world = Matrix.Identity(4)
-    # roots: low on the prop and further out than the trunk. Each root vertex is laid along the skin:
-    # walk from the anchor's SURFACE point (never from the sunk base, which may be inside the body)
-    # along the surface toward the root's direction, then sit at the skin + offset + the vertex's height
-    # above the root's own underside (so the underside touches the skin and the thickness is kept).
-    # Sink only moves the rigid trunk.
+    # roots, like a curve modifier per root: each root has a spine along its UNDERSIDE that rides the
+    # skin; every root vertex keeps (distance along the root, height above the underside, sideways
+    # offset) and is rebuilt in a frame that walks along the body surface. The spine follows the curve,
+    # the cross-section keeps its dimensions. Near the trunk it blends to the rigid (sunk) trunk.
     src = prop.data.vertices
     top = max(v.co.z for v in src)
     mid = [Vector((v.co.x, v.co.y)).length for v in src if 0.45 * top < v.co.z < 0.8 * top]
     trunk_r = sorted(mid)[len(mid) // 2] if mid else 0.1 * top
-    bins = {}
+    root_vs = [v for v in src if v.co.z < 0.5 * top and Vector((v.co.x, v.co.y)).length > trunk_r]
+    if not roots or not root_vs:
+        for v in o.data.vertices:
+            v.co = T @ v.co
+        o.data.update()
+        o.vertex_groups.clear()
+        o.vertex_groups.new(name=bone).add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
+        return o
 
-    def key(c):
-        return (round(math.atan2(c.y, c.x) / (math.pi / 16)), round(Vector((c.x, c.y)).length / (0.25 * trunk_r)))
-    for v in src:
-        k = key(v.co)
-        bins[k] = min(bins.get(k, 9.0), v.co.z)
+    # root directions: peaks of the angle histogram of the outer root vertices
+    hist = [0] * 36
+    for v in root_vs:
+        if Vector((v.co.x, v.co.y)).length > 1.5 * trunk_r:
+            hist[int((math.atan2(v.co.y, v.co.x) + math.pi) / (2 * math.pi) * 36) % 36] += 1
+    peaks = [i for i in range(36) if hist[i] > 0 and hist[i] >= hist[i - 1] and hist[i] >= hist[(i + 1) % 36]]
+    peaks = sorted(peaks, key=lambda i: -hist[i])[:5]
+    dirs = [(i + 0.5) / 36 * 2 * math.pi - math.pi for i in peaks] or [0.0]
+
+    def which(c):
+        ang = math.atan2(c.y, c.x)
+        return min(range(len(dirs)), key=lambda k: abs((ang - dirs[k] + math.pi) % (2 * math.pi) - math.pi))
+
+    # underside line per root: lowest z as a function of distance along the root
+    step = 0.25 * trunk_r
+    under = [dict() for _ in dirs]
+    length = [0.0 for _ in dirs]
+    for v in root_vs:
+        k = which(v.co)
+        d2 = Vector((math.cos(dirs[k]), math.sin(dirs[k])))
+        sd = Vector((v.co.x, v.co.y)).dot(d2)
+        b_ = int(sd / step)
+        under[k][b_] = min(under[k].get(b_, 9.0), v.co.z)
+        length[k] = max(length[k], sd)
+
+    def under_at(k, sd):
+        b_ = int(sd / step)
+        for off in (0, -1, 1, -2, 2):
+            if b_ + off in under[k]:
+                return under[k][b_ + off]
+        return 0.0
 
     def surface(q, nrm):
-        """Project q onto the skin from outside along -nrm (falls back to nearest)."""
         hit, hn, _, _ = bvh.ray_cast(q + nrm * 0.15, -nrm, 0.4)
         if hit is None:
             hit, hn, _, _ = bvh.find_nearest(q)
         if hn.dot(nrm) < 0:
             hn = -hn
-        return hit, hn
+        return hit, hn.normalized()
 
-    start = loc.copy()
-    n0 = Mi.to_3x3() @ n
+    # one surface path per root, in body-local space: points and smoothed normals every `ds`
+    Ml3 = Mi.to_3x3()
+    ds = step * scale
+    paths = []
+    for k, ang in enumerate(dirs):
+        d = (Ml3 @ (rot.to_3x3() @ Vector((math.cos(ang), math.sin(ang), 0)))).normalized()
+        q, qn = loc.copy(), (Ml3 @ n).normalized()
+        pts, nrs = [q.copy()], [qn.copy()]
+        for _ in range(int(length[k] * scale / ds) + 3):
+            tan = (d - qn * d.dot(qn)).normalized()
+            q, qn = surface(q + tan * ds, qn)
+            d = tan
+            pts.append(q.copy())
+            nrs.append(qn.copy())
+        sm = [sum(nrs[max(0, i - 2):i + 3], Vector()).normalized() for i in range(len(nrs))]   # smooth the frame
+        paths.append((pts, sm))
+
+    def frame(k, sd):
+        pts, nrs = paths[k]
+        f = max(0.0, sd * scale / ds)
+        i = min(int(f), len(pts) - 2)
+        u = min(1.0, f - i)
+        P = pts[i].lerp(pts[i + 1], u)
+        N = nrs[i].lerp(nrs[i + 1], u).normalized()
+        Tg = (pts[i + 1] - pts[i]).normalized()
+        B = N.cross(Tg).normalized()
+        return P, N, B
+
     for v in o.data.vertices:
         p = T @ v.co
-        r = Vector((v.co.x, v.co.y)).length
-        if not roots or v.co.z > 0.5 * top or r <= trunk_r:
+        c = v.co
+        r = Vector((c.x, c.y)).length
+        if c.z >= 0.5 * top or r <= trunk_r:
             v.co = p
             continue
+        k = which(c)
+        d2 = Vector((math.cos(dirs[k]), math.sin(dirs[k])))
+        sd = Vector((c.x, c.y)).dot(d2)
+        side = d2.x * c.y - d2.y * c.x          # left/right of the spine, in the prop's own units
+        h = max(0.0, c.z - under_at(k, sd))
+        P, N, B = frame(k, sd - trunk_r)
+        q = M @ (P + N * ((offset / scale + h) * scale) + B * (side * scale))
         t = min(1.0, (r - trunk_r) / (0.35 * trunk_r))
-        under = bins.get(key(v.co), 0.0)
-        d = Mi.to_3x3() @ (rot.to_3x3() @ Vector((v.co.x, v.co.y, 0))).normalized()
-        q, qn = start.copy(), n0.normalized()
-        steps = 8
-        for _ in range(steps):
-            tan = (d - qn * d.dot(qn)).normalized()
-            q, qn = surface(q + tan * (r * scale / steps), qn)
-        s_pt = M @ (q + qn.normalized() * (offset + max(0.0, v.co.z - under) * scale))
-        v.co = p.lerp(s_pt, t * t * (3 - 2 * t))
+        v.co = p.lerp(q, t * t * (3 - 2 * t))
     o.data.update()
     o.vertex_groups.clear()
     o.vertex_groups.new(name=bone).add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
