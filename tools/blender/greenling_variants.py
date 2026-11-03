@@ -737,7 +737,7 @@ def measure(o):
 
 
 def eye_centres(o):
-    """Centres of the bright bluish-white eye texels on the face, per side (Plane = creature's right)."""
+    """Centres of the bright (bluish-white or pale yellow) eye texels on the face, per side (Plane = creature's right)."""
     me = o.data
     M = o.matrix_world
     img = next(n.image for n in me.materials[0].node_tree.nodes if n.type == "TEX_IMAGE" and n.image)
@@ -752,7 +752,7 @@ def eye_centres(o):
                 continue
             u, v = uv[li].uv
             i = (min(h - 1, max(0, int(v * h))) * w + min(w - 1, max(0, int(u * w)))) * 4
-            if pix[i] + pix[i + 1] + pix[i + 2] > 2.0 and pix[i + 2] >= pix[i]:
+            if pix[i] + pix[i + 1] + pix[i + 2] > 2.0 and (pix[i + 2] >= pix[i] or pix[i + 1] > 0.75):  # blue-white or yellow glow
                 side["Plane" if p.x < 0 else "Plane.001"].append(p)
     return {k: tuple(round(sum(c[j] for c in v) / len(v), 3) for j in range(3)) for k, v in side.items() if v}
 
@@ -918,3 +918,50 @@ def bone_colour_render(o, out_prefix, shots, cam_name="PreviewCam"):
             x.hide_render = saved.get(x.name, x.hide_render)
         bpy.data.objects.remove(dbg, do_unlink=True)
     return paths
+
+
+
+# ---------------------------------------------------------------- vanilla-proportioned bodies
+
+def fit_targets(leg=(0.17, 0.23, 0.25), leg_y=(0.10, -0.08, -0.04), leg_z=(50.73, 50.45, 50.08),
+                arm_dy=0.0, arm_dz=0.0, arm_scale=1.0):
+    """
+    Bone targets for a body drawn over the vanilla bind pose (tools/blender/vanilla_boards.py):
+    legs from measured columns (hip, knee, ankle: x, y, z), the arm chain shifted by (arm_dy, arm_dz)
+    and scaled along x from the shoulder by arm_scale (generated arms come out a little short).
+    """
+    rig = bpy.data.objects[RIG]
+    W = rig.matrix_world
+    T = {}
+    for s, sx in (("l", 1), ("r", -1)):
+        for b, x, y, z in zip(("leg1", "leg2", "foot"), leg, leg_y, leg_z):
+            T[f"{s}_{b}"] = Vector((sx * x, y, z))
+        root = W @ rig.data.bones[f"{s}_arm1"].head_local
+        for b in ARM_CHAIN:
+            h = W @ rig.data.bones[f"{s}_{b}"].head_local
+            T[f"{s}_{b}"] = Vector((root.x + (h.x - root.x) * arm_scale, h.y + arm_dy, h.z + arm_dz))
+    return T
+
+
+def rig_body(o, name, eyes, out_json, template_json, targets, keep_stump=True, eye_push=0.03):
+    """Rig an already low-poly, textured body (Tripo retopology) on the vanilla skeleton and export it."""
+    info = gt.rig_to_vanilla(o, RIG, targets, weight_fix=weight_fix)
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = o
+    o.select_set(True)
+    if o.data.has_custom_normals:
+        bpy.ops.mesh.customdata_custom_splitnormals_clear()
+    bpy.ops.object.shade_smooth()
+    coll = gt.build_collection(o, SRC, eyes, eye_push=eye_push, dst="GL_" + name, keep_stump=keep_stump)
+    g = bpy.data.objects["GL_" + name + "_Cube"]
+    rig = bpy.data.objects[RIG]
+    info["arm_tube"] = arm_tube(g, rig, radius=0.1, keep_reach=0.1)
+    smooth_shoulders(g)
+    info["face"] = face_to_head(g, eyes)
+    lone = [v.index for v in g.data.vertices if not any(x.weight > 0 for x in v.groups)]
+    for vg in g.vertex_groups:
+        vg.remove(lone)
+    g.vertex_groups["spine3"].add(lone, 1.0, "REPLACE")
+    info["stretch_faces"] = len(remove_stretch(g, rig, dry=True))
+    info["counts"] = gio.export_creature(coll.name, template_json, out_json)
+    return info

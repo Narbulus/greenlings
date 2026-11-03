@@ -286,7 +286,7 @@ def rig_to_vanilla(o, rig_name, targets, weight_fix=None):
 
 # ---------------------------------------------------------------- assembly
 
-def build_collection(body, src_coll, eyes, eye_scale=1.3, eye_push=0.012, dst="GreenlingGen"):
+def build_collection(body, src_coll, eyes, eye_scale=1.3, eye_push=0.012, dst="GreenlingGen", keep_stump=False):
     """
     Game renderers for greenling_io.export_creature: Cube = the generated body, Cube.001 (vanilla
     back lump) = empty, Plane/Plane.001 = the vanilla glowing eye quads moved onto the new eyes.
@@ -306,11 +306,12 @@ def build_collection(body, src_coll, eyes, eye_scale=1.3, eye_push=0.012, dst="G
     b["game_renderer"] = "Cube"
     coll.objects.link(b)
 
-    lump_mesh = bpy.data.meshes.new(dst + "_lump")
-    lump_mesh.uv_layers.new(name="UVMap")
-    lump = bpy.data.objects.new(dst + "_Cube.001", lump_mesh)
-    lump["game_renderer"] = "Cube.001"
-    coll.objects.link(lump)
+    if not keep_stump:   # otherwise Cube.001 is left out of the export and the game keeps the vanilla stump
+        lump_mesh = bpy.data.meshes.new(dst + "_lump")
+        lump_mesh.uv_layers.new(name="UVMap")
+        lump = bpy.data.objects.new(dst + "_Cube.001", lump_mesh)
+        lump["game_renderer"] = "Cube.001"
+        coll.objects.link(lump)
 
     src = {o.get("game_renderer"): o for o in bpy.data.collections[src_coll].objects}
     for name, centre in eyes.items():
