@@ -81,7 +81,16 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   band (ROOT_BAND = 20% of height); the trunk radius is
   measured just above it. Measuring mid-height broke multi-stalk props (mushroom stalks, twig branches
   counted as roots and bent onto the skin).
-- Prop set (Blender scene "Props" collection): trunk_flat2, trunk_lean2, mush_a, twig_a, twig_leafy,
+- Several props in ONE Tripo run: stack them in a single column with gaps (each view = the column of
+  that view; a grid would overlap in the side views), cut each onto one shared background
+  (tools/tripo/stack.py), multiview + retopo face_limit=500 per prop, then split loose parts
+  into props by height band in Blender. 4 props for ~65 credits instead of ~260. Keep it to ~4 per
+  column: more leaves each prop too few pixels.
+- Mushrooms grow without roots: prop["no_roots"] places a prop rigid, base sunk into the skin.
+  Generated trunks whose roots slant DOWN (trunk_squat, trunk_fork) crumpled under the root rig;
+  they are rigid too for now (prop["root_band"] / prop["trunk_r"] overrides exist for the rig).
+- Prop set (Blender scene "Props" collection): trunk_flat2, trunk_lean2, trunk_squat, trunk_fork,
+  mush_a, mush_red3, mush_red1, mush_one, mush_short, twig_a, twig_leafy, twig_sapling, twig_bush,
   leaf_{bush,spray,beech}_{1,tuft}. Everything above a prop's roots rides its trunk bone (loose leaf
   cards would otherwise get root weights and fly off).
 - Texel density: the vanilla greydwarf body is ~62 texels per unit (128px texture, point-filtered):

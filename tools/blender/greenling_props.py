@@ -76,6 +76,7 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
            @ Matrix.Rotation(math.radians(spin), 4, "Z"))
     T = Matrix.Translation(base) @ rot @ Matrix.Scale(scale, 4)
 
+    roots = roots and not prop.get("no_roots")   # e.g. mushrooms: rigid, base sunk into the skin
     if roots:
         rig_prop(prop)   # weights must be on the prop before the copy
     o = prop.copy()
@@ -101,14 +102,22 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
 ROOT_BAND = 0.2   # fraction of the prop's height that counts as the flat root band
 
 
+def _band(prop, top):
+    """Height of the root band: ROOT_BAND of the height, or the prop's own "root_band" fraction (generated
+    trunks whose roots slant down from 20-40% of the height)."""
+    return prop.get("root_band", ROOT_BAND) * top
+
+
 def _root_layout(prop):
     """Trunk radius, root directions (angles) and each root's underside line from the prop mesh."""
     src = prop.data.vertices
     top = max(v.co.z for v in src)
-    band = ROOT_BAND * top     # roots lie flat at the base: only this band can be root
-    # trunk radius just above the roots (higher up, stalks or branches spread apart)
-    mid = [Vector((v.co.x, v.co.y)).length for v in src if band < v.co.z < 2.2 * band]
-    trunk_r = sorted(mid)[len(mid) // 2] if mid else 0.1 * top
+    band = _band(prop, top)     # roots lie flat at the base: only this band can be root
+    # trunk radius just above the roots (higher up, stalks or branches spread apart); props whose
+    # roots slant down from higher up (prop["root_band"]) measure it on the upper trunk instead
+    lo, hi = (0.5 * top, 0.8 * top) if "root_band" in prop else (band, 2.2 * band)
+    mid = [Vector((v.co.x, v.co.y)).length for v in src if lo < v.co.z < hi]
+    trunk_r = prop.get("trunk_r") or (sorted(mid)[len(mid) // 2] if mid else 0.1 * top)
     root_vs = [v.co for v in src if v.co.z < band and Vector((v.co.x, v.co.y)).length > trunk_r]
     hist = [0] * 36
     for c in root_vs:
@@ -187,7 +196,7 @@ def rig_prop(prop, segments=7):
     groups = {bn.name: prop.vertex_groups.get(bn.name) or prop.vertex_groups.new(name=bn.name) for bn in arm.bones}
     for v in prop.data.vertices:
         r = Vector((v.co.x, v.co.y)).length
-        if v.co.z > ROOT_BAND * top or r < 0.9 * trunk_r or not chains:
+        if v.co.z > _band(prop, top) or r < 0.9 * trunk_r or not chains:
             groups["trunk"].add([v.index], 1.0, "REPLACE")
             continue
         dist = {bn.name: _seg_dist(v.co, bn.head_local, bn.tail_local) for bones in chains.values() for bn in bones}

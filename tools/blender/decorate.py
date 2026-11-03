@@ -38,9 +38,9 @@ DEFAULTS = dict(
 PROPS = {
     "leaf": ["leaf_bush_1", "leaf_spray_1"],
     "tuft": ["leaf_bush_tuft", "leaf_spray_tuft"],
-    "trunk": ["trunk_flat2", "trunk_lean2"],
-    "mush": ["mush_a"],
-    "twig": ["twig_a", "twig_leafy"],
+    "trunk": ["trunk_flat2", "trunk_lean2", "trunk_squat", "trunk_fork"],
+    "mush": ["mush_a", "mush_red3", "mush_red1", "mush_one", "mush_short"],
+    "twig": ["twig_a", "twig_leafy", "twig_sapling", "twig_bush"],
 }
 
 
