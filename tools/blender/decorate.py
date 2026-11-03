@@ -67,9 +67,7 @@ def _surface_points(body, zones, rnd, n=4000):
             u, v = 1 - u, 1 - v
         p = a + (b - a) * u + (c - a) * v
         # outward normal: generated meshes have some flipped faces; out = away from the body's axis
-        axis = Vector((0.0, 0.1, p.z))
-        if nr.dot(p - axis) < 0:
-            nr = -nr
+        nr = outward(p, nr)
         z = next((zn for zn in zones if ZONES[zn](p, nr)), None)
         if z:
             out.append((p, nr, z))
@@ -125,18 +123,75 @@ def _origin_at(o, p):
     o.matrix_world = Matrix.Translation(p)
 
 
-def run(body, opts=None):
+def kind_of(name):
+    """leaf / tuft (cards) or trunk / mush / twig (wrapped props) from a prop's name."""
+    if name.startswith("leaf_"):
+        return "tuft" if name.endswith("_tuft") else "leaf"
+    return next((k for k in ("trunk", "mush", "twig") if name.startswith(k)), "twig")
+
+
+def default_palette(opts=None):
+    """[(prop name, weight)] from the per-kind weights (w_leaf ...), split across each kind's props."""
     opts = {**DEFAULTS, **(opts or {})}
-    rnd = random.Random(opts["seed"])
+    out = []
+    for k, names in PROPS.items():
+        names = [n for n in names if n in bpy.data.objects]
+        out += [(n, opts["w_" + k] / len(names)) for n in names]
+    return out
+
+
+def place(prop, body, p, nrm, rnd, opts, name, spin=None, scale=None):
+    """One decoration piece at surface point p (outward normal nrm), linked into the Decor collection,
+    origin at its base, its settings stored on it for re-editing (o["leaf"] / o["studio"])."""
+    opts = {**DEFAULTS, **opts}
+    coll = decor_collection()
+    if kind_of(prop.name) in ("leaf", "tuft"):
+        o = _place_leaf(prop, body, p, nrm, rnd, opts, name)
+    else:
+        spin = rnd.uniform(-180, 180) if spin is None else spin
+        if scale is None:
+            scale = rnd.uniform(*opts.get("prop_scale", (0.7, 1.0))) * (0.85 if kind_of(prop.name) == "trunk" else 1.0)
+        up = opts.get("upright", 0.6)
+        o = gp.wrap(prop, body, tuple(p), hint=tuple(nrm), spin=spin, name=name,
+                    scale=scale, sink=0.03, upright=up, lean=(0, 0, 0), roots=True)
+        o["studio"] = {"prop": prop.name, "anchor": list(p), "hint": list(nrm), "spin": spin, "scale": scale,
+                       "sink": 0.03, "upright": up, "lean": [0, 0], "tilt": [0, 0], "roots": True, "offset": 0.008}
+    for c in list(o.users_collection):
+        c.objects.unlink(o)
+    coll.objects.link(o)
+    _origin_at(o, p)
+    return o
+
+
+def decor_collection():
     coll = bpy.data.collections.get("Decor") or bpy.data.collections.new("Decor")
     if coll.name not in bpy.context.scene.collection.children:
         bpy.context.scene.collection.children.link(coll)
+    return coll
+
+
+def outward(p, nr):
+    """Flip a surface normal to point away from the body's axis (generated meshes have flipped faces)."""
+    return -nr if nr.dot(p - Vector((0.0, 0.1, p.z))) < 0 else nr
+
+
+def overlaps(o, others):
+    t = _bvh(o)
+    return any(t.overlap(_bvh(u)) for u in others if u != o)
+
+
+def run(body, opts=None):
+    """opts["palette"] = [(prop name, weight)] picks the props (default: per-kind weights). Trunks only on
+    the back (at most max_trunks), no mushrooms/twigs on the face/crown."""
+    opts = {**DEFAULTS, **(opts or {})}
+    rnd = random.Random(opts["seed"])
+    coll = decor_collection()
     for o in list(coll.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     pts = _surface_points(body, opts["zones"], rnd)
     rnd.shuffle(pts)
-    kinds = [k for k in ("leaf", "tuft", "trunk", "mush", "twig") for _ in range(int(opts["w_" + k]))]
-    if not kinds or not pts:
+    palette = [(n, w) for n, w in (opts.get("palette") or default_palette(opts)) if w > 0 and n in bpy.data.objects]
+    if not palette or not pts:
         return []
     placed, trees, centres = [], [], []
     trunks = 0
@@ -145,32 +200,13 @@ def run(body, opts=None):
             break
         if any((p - c).length < opts["gap"] for c in centres):
             continue
-        kind = rnd.choice(kinds)
-        if kind == "trunk" and (trunks >= opts["max_trunks"] or zone != "back"):
-            kind = "tuft"     # trunks only on the back (they tower over the head elsewhere)
-        if zone in ("face", "crown") and kind in ("mush", "twig"):
-            kind = "leaf"
-        names = [n for n in PROPS[kind] if n in bpy.data.objects]
-        if not names:
+        ok = [(n, w) for n, w in palette
+              if not (kind_of(n) == "trunk" and (trunks >= opts["max_trunks"] or zone != "back"))
+              and not (zone in ("face", "crown") and kind_of(n) in ("mush", "twig"))]
+        if not ok:
             continue
-        prop = bpy.data.objects[rnd.choice(names)]
-        nm = f"D{len(placed):02d}_{prop.name}"
-        if kind in ("leaf", "tuft"):
-            o = _place_leaf(prop, body, p, nrm, rnd, opts, nm)
-            for c in o.users_collection:
-                c.objects.unlink(o)
-        else:
-            spin = rnd.uniform(-180, 180)
-            scale = rnd.uniform(0.7, 1.0) * (0.85 if kind == "trunk" else 1.0)
-            o = gp.wrap(prop, body, tuple(p), hint=tuple(nrm), spin=spin, name=nm,
-                        scale=scale, sink=0.03, upright=0.6, lean=(0, 0, 0), roots=True)
-            for c in list(o.users_collection):
-                c.objects.unlink(o)
-        coll.objects.link(o)
-        if kind not in ("leaf", "tuft"):
-            o["studio"] = {"prop": prop.name, "anchor": list(p), "hint": list(nrm), "spin": spin, "scale": scale,
-                           "sink": 0.03, "upright": 0.6, "lean": [0, 0], "tilt": [0, 0], "roots": True, "offset": 0.008}
-        _origin_at(o, p)
+        prop = bpy.data.objects[rnd.choices([n for n, _ in ok], [w for _, w in ok])[0]]
+        o = place(prop, body, p, nrm, rnd, opts, f"D{len(placed):02d}_{prop.name}")
         t = _bvh(o)
         if any(t.overlap(u) for u in trees):
             bpy.data.objects.remove(o, do_unlink=True)
@@ -178,5 +214,5 @@ def run(body, opts=None):
         placed.append(o)
         trees.append(t)
         centres.append(p)
-        trunks += kind == "trunk"
+        trunks += kind_of(prop.name) == "trunk"
     return placed

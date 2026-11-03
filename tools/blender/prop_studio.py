@@ -91,7 +91,20 @@ def _upd(self, context):
             rebuild.busy = False
 
 
+class PaletteItem(bpy.types.PropertyGroup):
+    obj: bpy.props.PointerProperty(type=bpy.types.Object, poll=_is_prop)
+    on: bpy.props.BoolProperty(default=True)
+    weight: bpy.props.FloatProperty(name="Weight", default=1, min=0, max=20)
+
+
 class Settings(bpy.types.PropertyGroup):
+    palette: bpy.props.CollectionProperty(type=PaletteItem)
+    palette_i: bpy.props.IntProperty()
+    p_overlap: bpy.props.BoolProperty(name="Avoid overlaps", default=True,
+                                      description="Skip a dab that would cut into another decoration")
+    p_scale: bpy.props.FloatVectorProperty(name="Prop scale", size=2, default=(0.7, 1.0), min=0.05, max=5)
+    p_upright: bpy.props.FloatProperty(name="Prop upright", default=0.6, min=0, max=1,
+                                       description="Painted trunks/mushrooms/twigs: 1 = straight up, 0 = along the normal")
     body: bpy.props.PointerProperty(type=bpy.types.Object, poll=_is_body, update=_upd)
     prop: bpy.props.PointerProperty(type=bpy.types.Object, poll=_is_prop, update=_upd)
     has_anchor: bpy.props.BoolProperty(default=False)
@@ -128,11 +141,6 @@ class Settings(bpy.types.PropertyGroup):
     d_shoulders: bpy.props.BoolProperty(name="Shoulders", default=True)
     d_crown: bpy.props.BoolProperty(name="Crown", default=True)
     d_face: bpy.props.BoolProperty(name="Face", default=False)
-    w_leaf: bpy.props.IntProperty(name="Leaf", default=6, min=0, max=20)
-    w_tuft: bpy.props.IntProperty(name="Tuft", default=3, min=0, max=20)
-    w_trunk: bpy.props.IntProperty(name="Trunk", default=1, min=0, max=20)
-    w_mush: bpy.props.IntProperty(name="Mushroom", default=1, min=0, max=20)
-    w_twig: bpy.props.IntProperty(name="Twig", default=1, min=0, max=20)
     d_max_trunks: bpy.props.IntProperty(name="Max trunks", default=1, min=0, max=5)
     d_droop: bpy.props.FloatProperty(name="Leaf droop", default=35, min=0, max=90, description="0 = leaves stick straight out, 90 = lie flat down the body")
     d_tuck: bpy.props.FloatProperty(name="Leaf tuck", default=0.03, min=0, max=0.15, description="How deep leaf bases go into the skin")
@@ -290,12 +298,178 @@ class PS_OT_decorate(bpy.types.Operator):
         if not s.body:
             return {"CANCELLED"}
         zones = tuple(z for z in ("back", "shoulders", "crown", "face") if getattr(s, "d_" + z))
-        opts = dict(seed=s.d_seed, count=s.d_count, gap=s.d_gap, zones=zones, w_leaf=s.w_leaf, w_tuft=s.w_tuft,
-                    w_trunk=s.w_trunk, w_mush=s.w_mush, w_twig=s.w_twig, leaf_size=tuple(s.d_size),
-                    droop=s.d_droop, tuck=s.d_tuck, max_trunks=s.d_max_trunks)
+        opts = dict(_brush_opts(s), seed=s.d_seed, count=s.d_count, gap=s.d_gap, zones=zones,
+                    max_trunks=s.d_max_trunks, palette=_palette(s))
         placed = decorate.run(s.body, opts)
         self.report({"INFO"}, f"placed {len(placed)}")
         return {"FINISHED"}
+
+
+def _palette(s):
+    return [(i.obj.name, i.weight) for i in s.palette if i.on and i.obj and i.weight > 0]
+
+
+def _brush_opts(s):
+    return dict(leaf_size=tuple(s.d_size), droop=s.d_droop, tuck=s.d_tuck,
+                prop_scale=tuple(s.p_scale), upright=s.p_upright)
+
+
+def fill_palette(s):
+    """Every prop in the scene, weighted like the procedural defaults (beech leaves off)."""
+    import decorate
+    s.palette.clear()
+    w = dict(decorate.default_palette())
+    for o in sorted((o for o in bpy.data.objects if _is_prop(None, o) and not o.name.endswith("_rig")),
+                    key=lambda o: o.name):
+        it = s.palette.add()
+        it.obj = o
+        it.weight = round(w.get(o.name, 1.0), 2)
+        it.on = o.name in w
+
+
+class PS_OT_palette_fill(bpy.types.Operator):
+    bl_idname = "prop_studio.palette_fill"
+    bl_label = "Reset list"
+    bl_description = "List every prop in the scene with default weights"
+
+    def execute(self, context):
+        fill_palette(context.scene.prop_studio)
+        return {"FINISHED"}
+
+
+class PS_OT_palette_add(bpy.types.Operator):
+    bl_idname = "prop_studio.palette_add"
+    bl_label = "Add selected props"
+    bl_description = "Add the props selected in the viewport (or the Prop Studio prop) to the list"
+
+    def execute(self, context):
+        s = context.scene.prop_studio
+        have = {i.obj for i in s.palette}
+        for o in [o for o in context.selected_objects if _is_prop(None, o)] or [s.prop]:
+            if o and o not in have:
+                s.palette.add().obj = o
+        return {"FINISHED"}
+
+
+class PS_OT_palette_remove(bpy.types.Operator):
+    bl_idname = "prop_studio.palette_remove"
+    bl_label = "Remove from list"
+
+    def execute(self, context):
+        s = context.scene.prop_studio
+        if 0 <= s.palette_i < len(s.palette):
+            s.palette.remove(s.palette_i)
+            s.palette_i = max(0, s.palette_i - 1)
+        return {"FINISHED"}
+
+
+class PS_UL_palette(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_property, index=0, flt_flag=0):
+        row = layout.row(align=True)
+        row.prop(item, "on", text="")
+        row.label(text=item.obj.name if item.obj else "(missing)")
+        row.prop(item, "weight", text="")
+
+
+class PS_OT_paint(bpy.types.Operator):
+    """Paint props from the list onto the body: click or drag to place, Ctrl+click to erase,
+    Ctrl+Z to undo the last dab, Esc / right-click to stop. Navigation works as usual"""
+    bl_idname = "prop_studio.paint"
+    bl_label = "Paint"
+
+    def _hit(self, context, event):
+        import decorate
+        from bpy_extras import view3d_utils
+        s = context.scene.prop_studio
+        xy = (event.mouse_region_x, event.mouse_region_y)
+        o3 = view3d_utils.region_2d_to_origin_3d(context.region, context.region_data, xy)
+        d3 = view3d_utils.region_2d_to_vector_3d(context.region, context.region_data, xy)
+        M = s.body.matrix_world
+        Mi = M.inverted()
+        ok, p, n, _ = s.body.ray_cast(Mi @ o3, (Mi.to_3x3() @ d3).normalized())
+        if not ok:
+            return None
+        p = M @ p
+        return p, decorate.outward(p, (Mi.to_3x3().transposed() @ n).normalized())
+
+    def _dab(self, context, event):
+        import decorate
+        s = context.scene.prop_studio
+        hit = self._hit(context, event)
+        if not hit:
+            return
+        p, n = hit
+        if self.last is not None and (p - self.last).length < s.d_gap:
+            return
+        pal = _palette(s)
+        if not pal:
+            self.report({"WARNING"}, "no props ticked in the list")
+            return
+        prop = bpy.data.objects[self.rnd.choices([a for a, _ in pal], [w for _, w in pal])[0]]
+        k = 0
+        while f"P{k:02d}_{prop.name}" in bpy.data.objects:
+            k += 1
+        coll = decorate.decor_collection()
+        o = decorate.place(prop, s.body, p, n, self.rnd, _brush_opts(s), f"P{k:02d}_{prop.name}")
+        if s.p_overlap and decorate.overlaps(o, list(coll.objects)):
+            bpy.data.objects.remove(o, do_unlink=True)
+            return
+        self.placed.append(o.name)
+        self.last = p
+
+    def _erase(self, context, event):
+        hit = self._hit(context, event)
+        coll = bpy.data.collections.get("Decor")
+        if not hit or not coll or not coll.objects:
+            return
+        o = min(coll.objects, key=lambda o: (o.matrix_world.translation - hit[0]).length)
+        if (o.matrix_world.translation - hit[0]).length < 0.15:
+            bpy.data.objects.remove(o, do_unlink=True)
+
+    def _status(self, context):
+        context.area.header_text_set(
+            f"Paint props: click/drag place, Ctrl+click erase, Ctrl+Z undo, Esc/right-click done  ({len(self.placed)} placed)")
+
+    def invoke(self, context, event):
+        import random
+        s = context.scene.prop_studio
+        if not s.body or context.area.type != "VIEW_3D":
+            self.report({"WARNING"}, "pick a body and run from the 3D viewport")
+            return {"CANCELLED"}
+        if not s.palette:
+            fill_palette(s)
+        self.rnd = random.Random()
+        self.placed, self.last, self.down = [], None, False
+        context.window_manager.modal_handler_add(self)
+        self._status(context)
+        return {"RUNNING_MODAL"}
+
+    def modal(self, context, event):
+        if event.type in {"ESC", "RIGHTMOUSE"} and event.value == "PRESS":
+            context.area.header_text_set(None)
+            return {"FINISHED"}
+        if event.type == "Z" and event.ctrl and event.value == "PRESS":
+            while self.placed:
+                o = bpy.data.objects.get(self.placed.pop())
+                if o:
+                    bpy.data.objects.remove(o, do_unlink=True)
+                    break
+            self._status(context)
+            return {"RUNNING_MODAL"}
+        inside = 0 <= event.mouse_region_x < context.region.width and 0 <= event.mouse_region_y < context.region.height
+        if event.type == "LEFTMOUSE" and (inside or event.value == "RELEASE"):
+            if event.value == "PRESS":
+                self.down, self.last = True, None
+                (self._erase if event.ctrl else self._dab)(context, event)
+            elif event.value == "RELEASE":
+                self.down = False
+            self._status(context)
+            return {"RUNNING_MODAL"}
+        if event.type == "MOUSEMOVE" and self.down and inside and not event.ctrl:
+            self._dab(context, event)
+            self._status(context)
+            return {"RUNNING_MODAL"}
+        return {"PASS_THROUGH"}
 
 
 class PS_OT_reroll(bpy.types.Operator):
@@ -332,6 +506,15 @@ class PS_PT_decorate(bpy.types.Panel):
         row.operator("prop_studio.decorate", icon="OUTLINER_OB_POINTCLOUD")
         row.operator("prop_studio.reroll", text="", icon="FILE_REFRESH")
         row.operator("prop_studio.clear_decor", text="", icon="TRASH")
+        box = col.box()
+        row = box.row()
+        row.label(text="Props")
+        row.operator("prop_studio.palette_add", text="", icon="ADD")
+        row.operator("prop_studio.palette_remove", text="", icon="REMOVE")
+        row.operator("prop_studio.palette_fill", text="", icon="FILE_REFRESH")
+        box.template_list("PS_UL_palette", "", s, "palette", s, "palette_i", rows=6)
+        box.operator("prop_studio.paint", icon="BRUSH_DATA")
+        box.prop(s, "p_overlap")
         row = col.row()
         row.operator("prop_studio.edit_piece", icon="GREASEPENCIL")
         if s.editing:
@@ -350,13 +533,10 @@ class PS_PT_decorate(bpy.types.Panel):
         row = col.row(align=True)
         for z in ("back", "shoulders", "crown", "face"):
             row.prop(s, "d_" + z, toggle=True)
+        col.prop(s, "d_max_trunks")
         box = col.box()
-        box.label(text="Weights")
-        for k in ("w_leaf", "w_tuft", "w_trunk", "w_mush", "w_twig", "d_max_trunks"):
-            box.prop(s, k)
-        box = col.box()
-        box.label(text="Leaves")
-        for k in ("d_droop", "d_tuck", "d_size"):
+        box.label(text="Placement (decorate and paint)")
+        for k in ("d_droop", "d_tuck", "d_size", "p_scale", "p_upright"):
             box.prop(s, k)
 
 
@@ -386,7 +566,8 @@ class PS_PT_panel(bpy.types.Panel):
         row.operator("prop_studio.delete", text="", icon="TRASH")
 
 
-CLASSES = (Settings, PS_OT_anchor, PS_OT_save, PS_OT_load, PS_OT_delete, PS_OT_edit_piece, PS_OT_apply_piece,
+CLASSES = (PaletteItem, Settings, PS_OT_palette_fill, PS_OT_palette_add, PS_OT_palette_remove, PS_UL_palette,
+           PS_OT_paint, PS_OT_anchor, PS_OT_save, PS_OT_load, PS_OT_delete, PS_OT_edit_piece, PS_OT_apply_piece,
            PS_OT_decorate, PS_OT_reroll,
            PS_OT_clear_decor, PS_PT_panel, PS_PT_decorate)
 
@@ -417,6 +598,12 @@ def register(repo):
         bpy.utils.register_class(c)
     bpy.types.Scene.prop_studio = bpy.props.PointerProperty(type=Settings)
     _last_cursor = None
+    try:
+        for sc in bpy.data.scenes:
+            if not sc.prop_studio.palette:
+                fill_palette(sc.prop_studio)
+    except Exception:
+        pass      # restricted context at startup: the list fills on first Paint / Reset list
     bpy.app.timers.register(_follow_cursor, first_interval=0.2, persistent=True)
 
 

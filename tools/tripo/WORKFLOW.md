@@ -96,3 +96,6 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   `droop`, broad side across the flow, small random roll. Normals are re-oriented away from the
   body axis first: generated meshes have flipped faces and leaves stabbed out the far side.
   Trunks only on the back; no mushrooms/twigs on the face/crown.
+- Decorate panel: a props list (tick + weight per prop) feeds both Decorate and the Paint brush
+  (click/drag on the body to place from the list, Ctrl+click erase, Ctrl+Z undo, Esc done).
+  `decorate.place` is the one placement path for both.
