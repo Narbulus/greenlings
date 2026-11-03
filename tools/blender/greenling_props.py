@@ -73,118 +73,174 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
     rot = Vector((0, 0, 1)).rotation_difference(up).to_matrix().to_4x4() @ Matrix.Rotation(math.radians(spin), 4, "Z")
     T = Matrix.Translation(base) @ rot @ Matrix.Scale(scale, 4)
 
+    if roots:
+        rig_prop(prop)   # weights must be on the prop before the copy
     o = prop.copy()
     o.data = prop.data.copy()
     o.name = name or f"{prop.name}@{bone}"
     for c in body.users_collection:
         c.objects.link(o)
     o.matrix_world = Matrix.Identity(4)
-    # roots, like a curve modifier per root: each root has a spine along its UNDERSIDE that rides the
-    # skin; every root vertex keeps (distance along the root, height above the underside, sideways
-    # offset) and is rebuilt in a frame that walks along the body surface. The spine follows the curve,
-    # the cross-section keeps its dimensions. Near the trunk it blends to the rigid (sunk) trunk.
-    src = prop.data.vertices
-    top = max(v.co.z for v in src)
-    mid = [Vector((v.co.x, v.co.y)).length for v in src if 0.45 * top < v.co.z < 0.8 * top]
-    trunk_r = sorted(mid)[len(mid) // 2] if mid else 0.1 * top
-    root_vs = [v for v in src if v.co.z < 0.5 * top and Vector((v.co.x, v.co.y)).length > trunk_r]
-    if not roots or not root_vs:
+    if not roots:
         for v in o.data.vertices:
             v.co = T @ v.co
-        o.data.update()
-        o.vertex_groups.clear()
-        o.vertex_groups.new(name=bone).add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
-        return o
-
-    # root directions: peaks of the angle histogram of the outer root vertices
-    hist = [0] * 36
-    for v in root_vs:
-        if Vector((v.co.x, v.co.y)).length > 1.5 * trunk_r:
-            hist[int((math.atan2(v.co.y, v.co.x) + math.pi) / (2 * math.pi) * 36) % 36] += 1
-    peaks = [i for i in range(36) if hist[i] > 0 and hist[i] >= hist[i - 1] and hist[i] >= hist[(i + 1) % 36]]
-    peaks = sorted(peaks, key=lambda i: -hist[i])[:5]
-    dirs = [(i + 0.5) / 36 * 2 * math.pi - math.pi for i in peaks] or [0.0]
-
-    def which(c):
-        ang = math.atan2(c.y, c.x)
-        return min(range(len(dirs)), key=lambda k: abs((ang - dirs[k] + math.pi) % (2 * math.pi) - math.pi))
-
-    # underside line per root: lowest z as a function of distance along the root
-    step = 0.25 * trunk_r
-    under = [dict() for _ in dirs]
-    length = [0.0 for _ in dirs]
-    for v in root_vs:
-        k = which(v.co)
-        d2 = Vector((math.cos(dirs[k]), math.sin(dirs[k])))
-        sd = Vector((v.co.x, v.co.y)).dot(d2)
-        b_ = int(sd / step)
-        under[k][b_] = min(under[k].get(b_, 9.0), v.co.z)
-        length[k] = max(length[k], sd)
-
-    def under_at(k, sd):
-        b_ = int(sd / step)
-        for off in (0, -1, 1, -2, 2):
-            if b_ + off in under[k]:
-                return under[k][b_ + off]
-        return 0.0
-
-    def surface(q, nrm):
-        hit, hn, _, _ = bvh.ray_cast(q + nrm * 0.15, -nrm, 0.4)
-        if hit is None:
-            hit, hn, _, _ = bvh.find_nearest(q)
-        if hn.dot(nrm) < 0:
-            hn = -hn
-        return hit, hn.normalized()
-
-    # one surface path per root, in body-local space: points and smoothed normals every `ds`
-    Ml3 = Mi.to_3x3()
-    ds = step * scale
-    paths = []
-    for k, ang in enumerate(dirs):
-        d = (Ml3 @ (rot.to_3x3() @ Vector((math.cos(ang), math.sin(ang), 0)))).normalized()
-        q, qn = loc.copy(), (Ml3 @ n).normalized()
-        pts, nrs = [q.copy()], [qn.copy()]
-        for _ in range(int(length[k] * scale / ds) + 3):
-            tan = (d - qn * d.dot(qn)).normalized()
-            q, qn = surface(q + tan * ds, qn)
-            d = tan
-            pts.append(q.copy())
-            nrs.append(qn.copy())
-        sm = [sum(nrs[max(0, i - 2):i + 3], Vector()).normalized() for i in range(len(nrs))]   # smooth the frame
-        paths.append((pts, sm))
-
-    def frame(k, sd):
-        pts, nrs = paths[k]
-        f = max(0.0, sd * scale / ds)
-        i = min(int(f), len(pts) - 2)
-        u = min(1.0, f - i)
-        P = pts[i].lerp(pts[i + 1], u)
-        N = nrs[i].lerp(nrs[i + 1], u).normalized()
-        Tg = (pts[i + 1] - pts[i]).normalized()
-        B = N.cross(Tg).normalized()
-        return P, N, B
-
-    for v in o.data.vertices:
-        p = T @ v.co
-        c = v.co
-        r = Vector((c.x, c.y)).length
-        if c.z >= 0.5 * top or r <= trunk_r:
-            v.co = p
-            continue
-        k = which(c)
-        d2 = Vector((math.cos(dirs[k]), math.sin(dirs[k])))
-        sd = Vector((c.x, c.y)).dot(d2)
-        side = d2.x * c.y - d2.y * c.x          # left/right of the spine, in the prop's own units
-        h = max(0.0, c.z - under_at(k, sd))
-        P, N, B = frame(k, sd - trunk_r)
-        q = M @ (P + N * ((offset / scale + h) * scale) + B * (side * scale))
-        t = min(1.0, (r - trunk_r) / (0.35 * trunk_r))
-        v.co = p.lerp(q, t * t * (3 - 2 * t))
+    else:
+        _pose_roots(o, prop, T, rot, scale, bvh, M, Mi, loc, n, offset)
     o.data.update()
     o.vertex_groups.clear()
     o.vertex_groups.new(name=bone).add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
     return o
 
+
+
+# ---------------------------------------------------------------- root rig
+
+def _root_layout(prop):
+    """Trunk radius, root directions (angles) and each root's underside line from the prop mesh."""
+    src = prop.data.vertices
+    top = max(v.co.z for v in src)
+    mid = [Vector((v.co.x, v.co.y)).length for v in src if 0.45 * top < v.co.z < 0.8 * top]
+    trunk_r = sorted(mid)[len(mid) // 2] if mid else 0.1 * top
+    root_vs = [v.co for v in src if v.co.z < 0.5 * top and Vector((v.co.x, v.co.y)).length > trunk_r]
+    hist = [0] * 36
+    for c in root_vs:
+        if Vector((c.x, c.y)).length > 1.5 * trunk_r:
+            hist[int((math.atan2(c.y, c.x) + math.pi) / (2 * math.pi) * 36) % 36] += 1
+    peaks = [i for i in range(36) if hist[i] > 2 and hist[i] >= hist[i - 1] and hist[i] >= hist[(i + 1) % 36]]
+    dirs = [(i + 0.5) / 36 * 2 * math.pi - math.pi for i in sorted(peaks, key=lambda i: -hist[i])[:5]]
+    roots = []
+    for ang in dirs:
+        d2 = Vector((math.cos(ang), math.sin(ang)))
+        mine = [c for c in root_vs if abs((math.atan2(c.y, c.x) - ang + math.pi) % (2 * math.pi) - math.pi) < math.radians(25)]
+        if not mine:
+            continue
+        L = max(Vector((c.x, c.y)).dot(d2) for c in mine)
+
+        def under(sd, mine=mine, d2=d2):
+            near = [c.z for c in mine if abs(Vector((c.x, c.y)).dot(d2) - sd) < 0.15 * L]
+            return min(near) if near else 0.0
+        roots.append((ang, L, under))
+    return top, trunk_r, roots
+
+
+def rig_prop(prop, segments=4):
+    """Armature for a prop: a trunk bone and a chain of `segments` bones along each root's underside,
+    from inside the trunk wall to the tip; the prop gets automatic weights on it. Cached on the prop."""
+    name = prop.name + "_rig"
+    if name in bpy.data.objects:
+        return bpy.data.objects[name]
+    top, trunk_r, roots = _root_layout(prop)
+    arm = bpy.data.armatures.new(name)
+    rig = bpy.data.objects.new(name, arm)
+    for c in prop.users_collection:
+        c.objects.link(rig)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="EDIT")
+    trunk = arm.edit_bones.new("trunk")
+    trunk.head, trunk.tail = (0, 0, 0.0), (0, 0, top)
+    for k, (ang, L, under) in enumerate(roots):
+        d = Vector((math.cos(ang), math.sin(ang), 0))
+        s0 = 0.6 * trunk_r
+        prev = None
+        for j in range(segments):
+            a_, b_ = s0 + (L - s0) * j / segments, s0 + (L - s0) * (j + 1) / segments
+            eb = arm.edit_bones.new(f"root{k}_{j}")
+            eb.head = d * a_ + Vector((0, 0, under(a_)))
+            eb.tail = d * b_ + Vector((0, 0, under(b_)))
+            eb.parent = prev or trunk
+            eb.use_connect = prev is not None
+            prev = eb
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="DESELECT")
+    prop.select_set(True)
+    rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    prop.vertex_groups.clear()
+    bpy.ops.object.parent_set(type="ARMATURE_AUTO")
+    # heat weighting can miss parts of a generated mesh: give those to the nearest bone
+    names = [b.name for b in arm.bones]
+    for v in prop.data.vertices:
+        if not any(g.weight > 0 for g in v.groups):
+            best = min(arm.bones, key=lambda b: _seg_dist(v.co, b.head_local, b.tail_local))
+            (prop.vertex_groups.get(best.name) or prop.vertex_groups.new(name=best.name)).add([v.index], 1.0, "REPLACE")
+    prop.parent = None
+    for m in [m for m in prop.modifiers if m.type == "ARMATURE"]:
+        prop.modifiers.remove(m)
+    rig.hide_set(True)
+    rig.hide_render = True
+    return rig
+
+
+def _seg_dist(p, a, b):
+    ab = b - a
+    t = max(0.0, min(1.0, (p - a).dot(ab) / max(ab.length_squared, 1e-12)))
+    return (p - (a + ab * t)).length
+
+
+def _pose_roots(o, prop, T, rot, scale, bvh, M, Mi, loc, n, offset):
+    """Pose a copy of the prop's root rig so each root chain follows the body surface, bake it into o."""
+    src_rig = rig_prop(prop)
+    rig = src_rig.copy()
+    rig.data = src_rig.data.copy()
+    for c in o.users_collection:
+        c.objects.link(rig)
+    rig.hide_set(False)
+    rig.matrix_world = T
+    # o currently holds the prop's rest coordinates: bind it to the placed rig
+    for m in [m for m in o.modifiers if m.type == "ARMATURE"]:
+        o.modifiers.remove(m)
+    o.matrix_world = T
+    mod = o.modifiers.new("Arm", "ARMATURE")
+    mod.object = rig
+    bpy.context.view_layer.update()
+    W = rig.matrix_world
+    Wi = W.inverted()
+
+    def surface(q, nrm):
+        hit, hn, _, _ = bvh.ray_cast(q + nrm * 0.15, -nrm, 0.4)
+        if hit is None:
+            hit, hn, _, _ = bvh.find_nearest(q)
+        return hit, (hn if hn.dot(nrm) > 0 else -hn).normalized()
+
+    chains = {}
+    for b in rig.data.bones:
+        if b.name.startswith("root"):
+            k, j = b.name[4:].split("_")
+            chains.setdefault(int(k), []).append((int(j), b.name))
+    n_loc = (Mi.to_3x3() @ n).normalized()
+    for k, bones in chains.items():
+        bones = [nm for _, nm in sorted(bones)]
+        pb0 = rig.pose.bones[bones[0]]
+        head_w = W @ pb0.bone.head_local
+        q, qn = surface(Mi @ head_w, n_loc)
+        d_w = (W.to_3x3() @ (pb0.bone.tail_local - pb0.bone.head_local)).normalized()
+        d = (Mi.to_3x3() @ d_w).normalized()
+        for nm in bones:
+            pb = rig.pose.bones[nm]
+            bpy.context.view_layer.update()
+            head = W @ pb.head            # posed head (follows the parent)
+            seg = (pb.bone.tail_local - pb.bone.head_local).length * scale
+            tan = (d - qn * d.dot(qn)).normalized()
+            q, qn = surface(q + tan * seg, qn)
+            d = tan
+            target = M @ (q + qn * offset)
+            want = (target - head).normalized()
+            rest = pb.bone.matrix_local
+            rest_dir_w = (W.to_3x3() @ (rest.to_3x3() @ Vector((0, 1, 0)))).normalized()
+            Rw = rest_dir_w.rotation_difference(want).to_matrix()
+            world_m = Matrix.Translation(head) @ (Rw @ (W.to_3x3() @ rest.to_3x3())).to_4x4()
+            pb.matrix = Wi @ world_m
+    bpy.context.view_layer.update()
+    ev = o.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    me = bpy.data.meshes.new_from_object(ev)
+    o.modifiers.remove(mod)
+    old = o.data
+    o.data = me
+    if old.users == 0:
+        bpy.data.meshes.remove(old)
+    me.transform(o.matrix_world)
+    o.matrix_world = Matrix.Identity(4)
+    bpy.data.objects.remove(rig, do_unlink=True)
 
 
 # ---------------------------------------------------------------- leaf cards ("feathers")
