@@ -28,3 +28,15 @@ or break is decided by the brief, not by post-processing. Lessons from the first
 `greenling_variants.remove_stretch` poses the arms through `ARM_TEST_POSES` and reports how many
 faces stretch. A generation that needs it to delete more than a handful of faces is a brief problem:
 fix the brief and regenerate rather than editing the mesh.
+
+## Reference images from the vanilla boards (2026-11 workflow)
+
+- Start from `tools/blender/vanilla_boards.py` renders (body only, 2x2 grid for the 3:2 image output)
+  and EDIT them with `tools/images/openrouter_image.py` (`openai/gpt-5.4-image-2`). Word it as an edit
+  ("EDIT this image, keep everything, change only..."), attach ONE image, and change one or two things
+  per pass; extra reference images make the model blend instead of edit.
+- Keep the face jutting forward as far as vanilla's: a shallow face squashes when the head turns,
+  because the head bone sits where the vanilla face is.
+- No branches/twigs on the body: those become props attached later.
+- Generate full mode, then Tripo retopology (`tripo.py retopo`, v3.0, ~1500 faces), then
+  `greenling_variants.rig_body`.
