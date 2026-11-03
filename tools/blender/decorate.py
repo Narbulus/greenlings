@@ -82,7 +82,7 @@ def _bvh(o):
     return BVHTree.FromPolygons([M @ v.co for v in me.vertices], [tuple(p.vertices) for p in me.polygons])
 
 
-def _place_leaf(prop, body, p, nrm, rnd, opts, name):
+def _place_leaf(prop, body, p, nrm, rnd, opts, name, roll=None, size=None):
     """Card emerging from the skin: out along the normal, flowing down the body, rolled at random."""
     down = Vector((0, 0, -1))
     flow = (down - nrm * down.dot(nrm))
@@ -92,11 +92,12 @@ def _place_leaf(prop, body, p, nrm, rnd, opts, name):
     # card frame: up = out_dir, broad side across the flow (local X = sideways on the skin), so the
     # card springs out of the skin like a feather instead of lying flat or edge-on
     side = flow.cross(nrm).normalized()
-    side = Matrix.Rotation(math.radians(rnd.uniform(-opts["roll"], opts["roll"])), 3, out_dir) @ side
+    roll = rnd.uniform(-opts["roll"], opts["roll"]) if roll is None else roll
+    side = Matrix.Rotation(math.radians(roll), 3, out_dir) @ side
     y = out_dir.cross(side).normalized()
     x = y.cross(out_dir).normalized()
     R = Matrix((x, y, out_dir)).transposed().to_4x4()
-    s = rnd.uniform(*opts["leaf_size"])
+    s = rnd.uniform(*opts["leaf_size"]) if size is None else size
     T = Matrix.Translation(p - out_dir * opts["tuck"]) @ R @ Matrix.Scale(s, 4)
     o = prop.copy()
     o.data = prop.data.copy()
@@ -106,7 +107,16 @@ def _place_leaf(prop, body, p, nrm, rnd, opts, name):
     o.matrix_world = Matrix.Identity(4)
     o.vertex_groups.clear()
     o.vertex_groups.new(name="spine3").add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
+    o["leaf"] = {"prop": prop.name, "anchor": list(p), "normal": list(nrm), "droop": opts["droop"], "roll": roll,
+                 "size": s, "tuck": opts["tuck"]}
     return o
+
+
+def leaf_from(c, body, name):
+    """Re-place a leaf from its stored settings (o["leaf"])."""
+    import random as _r
+    return _place_leaf(bpy.data.objects[c["prop"]], body, Vector(c["anchor"]), Vector(c["normal"]).normalized(), _r.Random(0),
+                       {"droop": c["droop"], "tuck": c["tuck"], "roll": 0, "leaf_size": (1, 1)}, name, roll=c["roll"], size=c["size"])
 
 
 def _origin_at(o, p):

@@ -58,6 +58,23 @@ def rebuild(self=None, context=None):
         bpy.data.objects.remove(old, do_unlink=True)
     if not (s.body and s.prop and s.has_anchor):
         return
+    if s.edit_leaf:
+        import decorate
+        # surface direction at the (possibly moved) anchor, pointing away from the body's axis
+        from mathutils.bvhtree import BVHTree
+        body = s.body
+        bvh = BVHTree.FromObject(body, bpy.context.evaluated_depsgraph_get())
+        hit, hn, _, _ = bvh.find_nearest(body.matrix_world.inverted() @ Vector(s.anchor))
+        p = body.matrix_world @ hit if hit else Vector(s.anchor)
+        n = (body.matrix_world.to_3x3() @ hn).normalized() if hit else Vector((0, 1, 0))
+        if n.dot(p - Vector((0.0, 0.1, p.z))) < 0:
+            n = -n
+        nrm = list(n)
+        o = decorate.leaf_from({"prop": s.prop.name, "anchor": list(s.anchor), "normal": list(nrm), "droop": s.l_droop,
+                                "roll": s.l_roll, "size": s.l_size, "tuck": s.l_tuck}, s.body, PREVIEW)
+        bpy.context.scene.collection.objects.link(o)
+        o.hide_set(False)
+        return
     o = gp.wrap(s.prop, s.body, tuple(s.anchor), hint=tuple(s.hint), spin=s.spin, offset=s.offset,
                 bone=s.bone, name=PREVIEW, scale=s.scale, sink=s.sink, upright=s.upright,
                 lean=(s.lean[0], s.lean[1], 0.0), roots=s.roots, tilt=tuple(s.tilt))
@@ -98,6 +115,11 @@ class Settings(bpy.types.PropertyGroup):
                                  "l_arm1", "r_arm1", "l_shoulder", "r_shoulder")], update=_upd)
     save_name: bpy.props.StringProperty(name="Name", default="trunk_back")
     editing: bpy.props.StringProperty(default="")   # name of the decoration piece being re-edited
+    edit_leaf: bpy.props.BoolProperty(default=False)
+    l_droop: bpy.props.FloatProperty(name="Droop", default=35, min=-90, max=180, update=_upd)
+    l_roll: bpy.props.FloatProperty(name="Roll", default=0, min=-180, max=180, update=_upd)
+    l_size: bpy.props.FloatProperty(name="Size", default=1, min=0.1, max=4, update=_upd)
+    l_tuck: bpy.props.FloatProperty(name="Tuck", default=0.03, min=-0.1, max=0.3, update=_upd)
     # procedural decoration
     d_seed: bpy.props.IntProperty(name="Seed", default=1, min=0)
     d_count: bpy.props.IntProperty(name="Count", default=10, min=1, max=60)
@@ -193,11 +215,24 @@ class PS_OT_edit_piece(bpy.types.Operator):
     def execute(self, context):
         o = context.active_object
         s = context.scene.prop_studio
+        if o and o.get("leaf"):
+            c = o["leaf"].to_dict()
+            rebuild.busy = True
+            try:
+                s.prop = bpy.data.objects[c["prop"]]
+                s.anchor, s.l_droop, s.l_roll, s.l_size, s.l_tuck = c["anchor"], c["droop"], c["roll"], c["size"], c["tuck"]
+                s.has_anchor, s.editing, s.edit_leaf = True, o.name, True
+            finally:
+                rebuild.busy = False
+            o.hide_set(True)
+            rebuild()
+            return {"FINISHED"}
         c = o.get("studio") if o else None
         if not c:
-            self.report({"ERROR"}, "select a wrapped decoration piece (leaves: move/rotate them directly)")
+            self.report({"ERROR"}, "select a decoration piece")
             return {"CANCELLED"}
         c = c.to_dict()
+        s.edit_leaf = False
         rebuild.busy = True
         try:
             s.prop = bpy.data.objects[c["prop"]]
@@ -229,6 +264,12 @@ class PS_OT_apply_piece(bpy.types.Operator):
         for c in colls:
             c.objects.link(pv)
         pv.name = name
+        if s.edit_leaf:
+            # anchor may have moved: keep the old normal unless it moved far (then take the surface's)
+            import decorate
+            decorate._origin_at(pv, Vector(s.anchor))
+            s.editing, s.edit_leaf = "", False
+            return {"FINISHED"}
         pv["studio"] = {"prop": s.prop.name, "anchor": list(s.anchor), "hint": list(s.hint), "spin": s.spin,
                         "scale": s.scale, "sink": s.sink, "upright": s.upright, "lean": list(s.lean),
                         "tilt": list(s.tilt), "roots": s.roots, "offset": s.offset}
@@ -295,7 +336,14 @@ class PS_PT_decorate(bpy.types.Panel):
         row.operator("prop_studio.edit_piece", icon="GREASEPENCIL")
         if s.editing:
             row.operator("prop_studio.apply_piece", icon="CHECKMARK")
-            col.label(text="Editing " + s.editing + " (sliders above)")
+            if s.edit_leaf:
+                box = col.box()
+                box.label(text="Editing leaf " + s.editing)
+                box.operator("prop_studio.anchor", icon="PIVOT_CURSOR")
+                for k in ("prop", "l_droop", "l_roll", "l_size", "l_tuck"):
+                    box.prop(s, k)
+            else:
+                col.label(text="Editing " + s.editing + " (sliders above)")
         col.prop(s, "d_seed")
         col.prop(s, "d_count")
         col.prop(s, "d_gap")
