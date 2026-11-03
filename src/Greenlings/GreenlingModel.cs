@@ -383,19 +383,24 @@ namespace Greenlings
         private static Material LeafMaterial(string texture)
         {
             if (_leaves.TryGetValue(texture, out var found)) return found;
-            Material hit = null;
+            // the texture was extracted under a simplified name: exact match first, else one containing it
+            Material exact = null, loose = null;
             if (ZNetScene.instance)
                 foreach (var prefab in ZNetScene.instance.m_prefabs)
                 {
-                    if (!prefab) continue;
+                    if (!prefab || exact) continue;
                     foreach (var r in prefab.GetComponentsInChildren<Renderer>(true))
-                    {
-                        hit = r.sharedMaterials.FirstOrDefault(m => m && m.HasProperty("_MainTex") && m.mainTexture && m.mainTexture.name == texture);
-                        if (hit) break;
-                    }
-                    if (hit) break;
+                        foreach (var m in r.sharedMaterials)
+                        {
+                            if (!m || !m.HasProperty("_MainTex") || !m.mainTexture) continue;
+                            var n = m.mainTexture.name;
+                            if (n == texture) exact = m;
+                            else if (!loose && n.IndexOf(texture, StringComparison.OrdinalIgnoreCase) >= 0) loose = m;
+                        }
                 }
+            var hit = exact ? exact : loose;
             if (!hit) Plugin.Log.LogWarning($"model: no game material uses leaf texture {texture}; those leaves are not shown");
+            else Plugin.Log.LogInfo($"[GLEVT] model leaf {texture} -> material {hit.name} texture {hit.mainTexture.name} shader {hit.shader.name}");
             return _leaves[texture] = hit;
         }
 
