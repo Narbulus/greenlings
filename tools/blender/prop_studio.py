@@ -60,7 +60,7 @@ def rebuild(self=None, context=None):
         return
     o = gp.wrap(s.prop, s.body, tuple(s.anchor), hint=tuple(s.hint), spin=s.spin, offset=s.offset,
                 bone=s.bone, name=PREVIEW, scale=s.scale, sink=s.sink, upright=s.upright,
-                lean=(s.lean[0], s.lean[1], 0.0), roots=s.roots)
+                lean=(s.lean[0], s.lean[1], 0.0), roots=s.roots, tilt=tuple(s.tilt))
     o.hide_set(False)
     o.hide_render = False
 
@@ -82,13 +82,15 @@ class Settings(bpy.types.PropertyGroup):
     hint: bpy.props.FloatVectorProperty(size=3, default=(0, 1, 0.5), update=_upd,
                                         description="Which way 'out' is (decides the side of a thin part)")
     spin: bpy.props.FloatProperty(name="Spin", default=0, min=-180, max=180, update=_upd)
-    scale: bpy.props.FloatProperty(name="Scale", default=1, min=0.2, max=3, update=_upd)
+    scale: bpy.props.FloatProperty(name="Scale", default=1, min=0.05, max=5, update=_upd)
     upright: bpy.props.FloatProperty(name="Upright", default=0.75, min=0, max=1, update=_upd,
                                      description="1 = straight up, 0 = along the surface normal")
-    lean: bpy.props.FloatVectorProperty(name="Lean", size=2, default=(0, 0.25), min=-1, max=1, update=_upd)
-    sink: bpy.props.FloatProperty(name="Sink", default=0.03, min=-0.1, max=0.2, update=_upd,
+    lean: bpy.props.FloatVectorProperty(name="Lean", size=2, default=(0, 0.25), min=-5, max=5, update=_upd)
+    tilt: bpy.props.FloatVectorProperty(name="Tilt", size=2, default=(0, 0), min=-180, max=180, update=_upd,
+                                        description="Rotate about the prop's own X / Y axes, degrees")
+    sink: bpy.props.FloatProperty(name="Sink", default=0.03, min=-0.5, max=0.5, update=_upd,
                                   description="How far the base sits into the body")
-    offset: bpy.props.FloatProperty(name="Root offset", default=0.008, min=0, max=0.05, update=_upd,
+    offset: bpy.props.FloatProperty(name="Root offset", default=0.008, min=-0.1, max=0.3, update=_upd,
                                     description="Gap between roots and skin")
     roots: bpy.props.BoolProperty(name="Wrap roots", default=True, update=_upd,
                                   description="Bend the prop's spread-out base onto the skin (off: rigid)")
@@ -123,7 +125,7 @@ class PS_OT_save(bpy.types.Operator):
         d[s.save_name] = {"prop": s.prop.name, "anchor": [round(x, 4) for x in s.anchor],
                           "hint": [round(x, 3) for x in s.hint], "spin": round(s.spin, 2), "scale": round(s.scale, 3),
                           "upright": round(s.upright, 3), "lean": [round(x, 3) for x in s.lean], "sink": round(s.sink, 4),
-                          "offset": round(s.offset, 4), "bone": s.bone, "roots": s.roots}
+                          "offset": round(s.offset, 4), "bone": s.bone, "roots": s.roots, "tilt": [round(x, 2) for x in s.tilt]}
         _save_all(d)
         s.saved = s.save_name
         self.report({"INFO"}, f"saved {s.save_name} to {_path()}")
@@ -146,6 +148,7 @@ class PS_OT_load(bpy.types.Operator):
             s.anchor, s.hint, s.spin, s.scale = c["anchor"], c["hint"], c["spin"], c["scale"]
             s.upright, s.lean, s.sink, s.offset, s.bone = c["upright"], c["lean"], c["sink"], c["offset"], c["bone"]
             s.roots = c.get("roots", True)
+            s.tilt = c.get("tilt", (0, 0))
             s.has_anchor, s.save_name = True, s.saved
         finally:
             rebuild.busy = False
@@ -179,7 +182,7 @@ class PS_PT_panel(bpy.types.Panel):
         if s.has_anchor:
             col.label(text="Anchor %.2f %.2f %.2f" % tuple(s.anchor))
         box = col.box()
-        for k in ("spin", "scale", "upright", "lean", "sink", "roots", "offset", "hint", "bone"):
+        for k in ("spin", "tilt", "scale", "upright", "lean", "sink", "roots", "offset", "hint", "bone"):
             box.prop(s, k)
         row = col.row()
         row.prop(s, "save_name")

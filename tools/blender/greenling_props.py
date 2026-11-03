@@ -57,7 +57,7 @@ def import_prop(glb, name, height=0.42):
 
 
 def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine3",
-         name=None, scale=1.0, sink=0.03, upright=0.75, lean=(0, 0.25, 0), roots=True):
+         name=None, scale=1.0, sink=0.03, upright=0.75, lean=(0, 0.25, 0), roots=True, tilt=(0.0, 0.0)):
     """Place `prop` on `body` at `anchor` and wrap its roots onto the skin. Returns the new object."""
     dg = bpy.context.evaluated_depsgraph_get()
     bvh = BVHTree.FromObject(body, dg)
@@ -70,7 +70,10 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
     # trunks stand mostly upright like the vanilla stump, tilted a little by the surface and `lean`
     up = (Vector((0, 0, 1)) * upright + n * (1 - upright) + Vector(lean)).normalized()
     base = M @ loc - up * sink
-    rot = Vector((0, 0, 1)).rotation_difference(up).to_matrix().to_4x4() @ Matrix.Rotation(math.radians(spin), 4, "Z")
+    # full orientation: stand on `up`, then tilt about the prop's own X/Y (any angle), then spin
+    rot = (Vector((0, 0, 1)).rotation_difference(up).to_matrix().to_4x4()
+           @ Matrix.Rotation(math.radians(tilt[0]), 4, "X") @ Matrix.Rotation(math.radians(tilt[1]), 4, "Y")
+           @ Matrix.Rotation(math.radians(spin), 4, "Z"))
     T = Matrix.Translation(base) @ rot @ Matrix.Scale(scale, 4)
 
     if roots:
