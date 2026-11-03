@@ -82,3 +82,10 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   that IS the Valheim pixel look. Match it: body skins ship at 128px (bake big, then downscale the
   final skin; 1024px was ~8x too fine), leaf cards sample a texture window sized for 62 px/unit
   (`greenling_props.TEXEL_DENSITY`). Check new assets with the density measure before shipping.
+- Procedural decoration (`decorate.py`, Prop Studio > Decorate): zones on the shared body layout
+  (back, shoulders stopping before the arms, crown, face), area-weighted surface samples with a
+  minimum spacing, weighted prop choice, BVH overlap test between decorations (props may cut into the
+  body, not each other). Leaves: base tucked under the skin, up = normal tilted down the body by
+  `droop`, broad side across the flow, small random roll. Normals are re-oriented away from the
+  body axis first: generated meshes have flipped faces and leaves stabbed out the far side.
+  Trunks only on the back; no mushrooms/twigs on the face/crown.

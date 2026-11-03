@@ -97,6 +97,23 @@ class Settings(bpy.types.PropertyGroup):
     bone: bpy.props.EnumProperty(name="Bone", items=[(b, b, "") for b in ("spine3", "spine2", "spine1", "head",
                                  "l_arm1", "r_arm1", "l_shoulder", "r_shoulder")], update=_upd)
     save_name: bpy.props.StringProperty(name="Name", default="trunk_back")
+    # procedural decoration
+    d_seed: bpy.props.IntProperty(name="Seed", default=1, min=0)
+    d_count: bpy.props.IntProperty(name="Count", default=10, min=1, max=60)
+    d_gap: bpy.props.FloatProperty(name="Spacing", default=0.09, min=0.01, max=0.5)
+    d_back: bpy.props.BoolProperty(name="Back", default=True)
+    d_shoulders: bpy.props.BoolProperty(name="Shoulders", default=True)
+    d_crown: bpy.props.BoolProperty(name="Crown", default=True)
+    d_face: bpy.props.BoolProperty(name="Face", default=False)
+    w_leaf: bpy.props.IntProperty(name="Leaf", default=6, min=0, max=20)
+    w_tuft: bpy.props.IntProperty(name="Tuft", default=3, min=0, max=20)
+    w_trunk: bpy.props.IntProperty(name="Trunk", default=1, min=0, max=20)
+    w_mush: bpy.props.IntProperty(name="Mushroom", default=1, min=0, max=20)
+    w_twig: bpy.props.IntProperty(name="Twig", default=1, min=0, max=20)
+    d_max_trunks: bpy.props.IntProperty(name="Max trunks", default=1, min=0, max=5)
+    d_droop: bpy.props.FloatProperty(name="Leaf droop", default=35, min=0, max=90, description="0 = leaves stick straight out, 90 = lie flat down the body")
+    d_tuck: bpy.props.FloatProperty(name="Leaf tuck", default=0.03, min=0, max=0.15, description="How deep leaf bases go into the skin")
+    d_size: bpy.props.FloatVectorProperty(name="Leaf size", size=2, default=(0.8, 1.2), min=0.2, max=3)
     saved: bpy.props.EnumProperty(name="Saved", items=_saved_items)
 
 
@@ -167,6 +184,75 @@ class PS_OT_delete(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class PS_OT_decorate(bpy.types.Operator):
+    bl_idname = "prop_studio.decorate"
+    bl_label = "Decorate"
+    bl_description = "Place props procedurally on the body (collection Decor)"
+
+    def execute(self, context):
+        import decorate
+        s = context.scene.prop_studio
+        if not s.body:
+            return {"CANCELLED"}
+        zones = tuple(z for z in ("back", "shoulders", "crown", "face") if getattr(s, "d_" + z))
+        opts = dict(seed=s.d_seed, count=s.d_count, gap=s.d_gap, zones=zones, w_leaf=s.w_leaf, w_tuft=s.w_tuft,
+                    w_trunk=s.w_trunk, w_mush=s.w_mush, w_twig=s.w_twig, leaf_size=tuple(s.d_size),
+                    droop=s.d_droop, tuck=s.d_tuck, max_trunks=s.d_max_trunks)
+        placed = decorate.run(s.body, opts)
+        self.report({"INFO"}, f"placed {len(placed)}")
+        return {"FINISHED"}
+
+
+class PS_OT_reroll(bpy.types.Operator):
+    bl_idname = "prop_studio.reroll"
+    bl_label = "New seed"
+
+    def execute(self, context):
+        context.scene.prop_studio.d_seed += 1
+        return bpy.ops.prop_studio.decorate()
+
+
+class PS_OT_clear_decor(bpy.types.Operator):
+    bl_idname = "prop_studio.clear_decor"
+    bl_label = "Clear"
+
+    def execute(self, context):
+        c = bpy.data.collections.get("Decor")
+        if c:
+            for o in list(c.objects):
+                bpy.data.objects.remove(o, do_unlink=True)
+        return {"FINISHED"}
+
+
+class PS_PT_decorate(bpy.types.Panel):
+    bl_label = "Decorate"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Greenlings"
+
+    def draw(self, context):
+        s = context.scene.prop_studio
+        col = self.layout.column()
+        row = col.row()
+        row.operator("prop_studio.decorate", icon="OUTLINER_OB_POINTCLOUD")
+        row.operator("prop_studio.reroll", text="", icon="FILE_REFRESH")
+        row.operator("prop_studio.clear_decor", text="", icon="TRASH")
+        col.prop(s, "d_seed")
+        col.prop(s, "d_count")
+        col.prop(s, "d_gap")
+        row = col.row(align=True)
+        for z in ("back", "shoulders", "crown", "face"):
+            row.prop(s, "d_" + z, toggle=True)
+        box = col.box()
+        box.label(text="Weights")
+        for k in ("w_leaf", "w_tuft", "w_trunk", "w_mush", "w_twig", "d_max_trunks"):
+            box.prop(s, k)
+        box = col.box()
+        box.label(text="Leaves")
+        for k in ("d_droop", "d_tuck", "d_size"):
+            box.prop(s, k)
+
+
 class PS_PT_panel(bpy.types.Panel):
     bl_label = "Prop Studio"
     bl_space_type = "VIEW_3D"
@@ -193,7 +279,8 @@ class PS_PT_panel(bpy.types.Panel):
         row.operator("prop_studio.delete", text="", icon="TRASH")
 
 
-CLASSES = (Settings, PS_OT_anchor, PS_OT_save, PS_OT_load, PS_OT_delete, PS_PT_panel)
+CLASSES = (Settings, PS_OT_anchor, PS_OT_save, PS_OT_load, PS_OT_delete, PS_OT_decorate, PS_OT_reroll,
+           PS_OT_clear_decor, PS_PT_panel, PS_PT_decorate)
 
 
 def register(repo):
