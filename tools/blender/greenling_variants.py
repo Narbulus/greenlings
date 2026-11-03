@@ -736,25 +736,51 @@ def measure(o):
     return {"leg_x": round(leg_x, 3), "arm_dz": round(arm_dz, 3), "arm_dy": round(arm_dy, 3), "eyes": eyes}
 
 
-def eye_centres(o):
-    """Centres of the bright (bluish-white or pale yellow) eye texels on the face, per side (Plane = creature's right)."""
+def eye_centres(o, depth=0.25, steps=8):
+    """
+    Centres of the glowing eye texels on the front of the face, per side (Plane = creature's right).
+    The texture is sampled across every triangle of the head front (a low-poly face has few vertices,
+    the eyes fall between them); the eye is the cluster of samples nearly as bright as the brightest
+    (pale yellow, white or bluish glow) on each side.
+    """
     me = o.data
     M = o.matrix_world
-    img = next(n.image for n in me.materials[0].node_tree.nodes if n.type == "TEX_IMAGE" and n.image)
+    img = next(n.image for n in me.materials[0].node_tree.nodes if n.type == "TEX_IMAGE" and n.image and "Normal" not in n.image.name)
     w, h = img.size
     pix = img.pixels[:]
     uv = me.uv_layers.active.data
-    side = {"Plane": [], "Plane.001": []}
-    for poly in me.polygons:
-        for li in poly.loop_indices:
-            p = M @ me.vertices[me.loops[li].vertex_index].co
-            if p.y > -0.15 or abs(p.x) > 0.35 or p.z < 50.7:
-                continue
-            u, v = uv[li].uv
-            i = (min(h - 1, max(0, int(v * h))) * w + min(w - 1, max(0, int(u * w)))) * 4
-            if pix[i] + pix[i + 1] + pix[i + 2] > 2.0 and (pix[i + 2] >= pix[i] or pix[i + 1] > 0.75):  # blue-white or yellow glow
-                side["Plane" if p.x < 0 else "Plane.001"].append(p)
-    return {k: tuple(round(sum(c[j] for c in v) / len(v), 3) for j in range(3)) for k, v in side.items() if v}
+    co = [M @ v.co for v in me.vertices]
+    head = [p for p in co if abs(p.x) < 0.3 and p.z > 50.95]
+    front = min(p.y for p in head)
+    me.calc_loop_triangles()
+    samples = []
+    for tri in me.loop_triangles:
+        ps = [co[i] for i in tri.vertices]
+        if all(abs(p.x) > 0.3 or p.z < 50.95 or p.y > front + depth for p in ps):
+            continue
+        uvs = [uv[li].uv for li in tri.loops]
+        for i in range(steps + 1):
+            for j in range(steps + 1 - i):
+                a_, b_ = i / steps, j / steps
+                c_ = 1 - a_ - b_
+                p = ps[0] * a_ + ps[1] * b_ + ps[2] * c_
+                if abs(p.x) > 0.3 or p.y > front + depth or abs(p.x) < 0.01:
+                    continue
+                u = uvs[0].x * a_ + uvs[1].x * b_ + uvs[2].x * c_
+                v = uvs[0].y * a_ + uvs[1].y * b_ + uvs[2].y * c_
+                k = (min(h - 1, max(0, int(v * h))) * w + min(w - 1, max(0, int(u * w)))) * 4
+                r, g, bb = pix[k:k + 3]
+                if g > 0.55 or bb >= r:
+                    samples.append((r + g + bb, p))
+    out = {}
+    for name, sign in (("Plane", -1), ("Plane.001", 1)):
+        mine = [t for t in samples if t[1].x * sign > 0]
+        if not mine:
+            continue
+        cut = max(b for b, _ in mine) - 0.2   # the glow itself, not the lighter face paint around it
+        pts = [p for b, p in mine if b >= cut]
+        out[name] = tuple(round(sum(c[j] for c in pts) / len(pts), 3) for j in range(3))
+    return out
 
 
 def rigid_beyond_hand(o, side, start=0.78):
@@ -943,9 +969,15 @@ def fit_targets(leg=(0.17, 0.23, 0.25), leg_y=(0.10, -0.08, -0.04), leg_z=(50.73
     return T
 
 
-def rig_body(o, name, eyes, out_json, template_json, targets, keep_stump=True, eye_push=0.03):
-    """Rig an already low-poly, textured body (Tripo retopology) on the vanilla skeleton and export it."""
-    info = gt.rig_to_vanilla(o, RIG, targets, weight_fix=weight_fix)
+def rig_body(o, name, eyes, out_json, template_json, targets, keep_stump=True, eye_push=0.03, head_fn=None):
+    """Rig an already low-poly, textured body (Tripo retopology) on the vanilla skeleton and export it.
+    head_fn(mesh) runs before the mesh is posed back into the vanilla bind pose: weights that are wrong
+    at that point (face on the shoulders) would bake a distortion into the shape."""
+    def fixes(m, fit_rig):
+        weight_fix(m, fit_rig)
+        if head_fn:
+            head_fn(m)
+    info = gt.rig_to_vanilla(o, RIG, targets, weight_fix=fixes)
     bpy.ops.object.select_all(action="DESELECT")
     bpy.context.view_layer.objects.active = o
     o.select_set(True)
@@ -958,10 +990,108 @@ def rig_body(o, name, eyes, out_json, template_json, targets, keep_stump=True, e
     info["arm_tube"] = arm_tube(g, rig, radius=0.1, keep_reach=0.1)
     smooth_shoulders(g)
     info["face"] = face_to_head(g, eyes)
+    if head_fn:
+        info["head"] = head_fn(g)   # again: arm_tube and face_to_head above redistribute some of it
     lone = [v.index for v in g.data.vertices if not any(x.weight > 0 for x in v.groups)]
     for vg in g.vertex_groups:
         vg.remove(lone)
     g.vertex_groups["spine3"].add(lone, 1.0, "REPLACE")
     info["stretch_faces"] = len(remove_stretch(g, rig, dry=True))
     info["counts"] = gio.export_creature(coll.name, template_json, out_json)
+    return info
+
+
+def head_to_head(o, eyes, arm_z, iterations=3):
+    """
+    The whole head unit (face, chin plank and the trunk on top) rides the head bone, blended into the
+    torso over a few rings at the neck. A face partly on the head and partly on the torso folds when
+    the head turns. Members: everything above the shoulders near the centre line (trunk, top of the
+    head) and the front protrusion around and below the eyes (face, chin).
+    """
+    import bmesh
+    eye_z = sum(p[2] for p in eyes.values()) / len(eyes)
+    eye_y = sum(p[1] for p in eyes.values()) / len(eyes)
+    M = o.matrix_world
+    head = o.vertex_groups["head"].index
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bm.verts.ensure_lookup_table()
+    w = {}
+    for v in bm.verts:
+        p = M @ v.co
+        # trunk/top of head: above both the shoulders and the eyes, near the centre line
+        top = p.z > max(arm_z, eye_z) + 0.1 and abs(p.x) < 0.18 and p.y < 0.12
+        # face and chin: the forward protrusion around and below the eyes, not the chest behind it
+        face = abs(p.x) < 0.15 and p.y < eye_y + 0.05 and eye_z - 0.3 < p.z < eye_z + 0.2
+        w[v.index] = 1.0 if (top or face) else 0.0
+    for _ in range(iterations):   # soften the border so the neck bends instead of creasing
+        nw = dict(w)
+        for v in bm.verts:
+            nb = [w[e.other_vert(v).index] for e in v.link_edges]
+            if nb and (w[v.index] > 0 or any(nb)):
+                nw[v.index] = (w[v.index] + sum(nb)) / (1 + len(nb))
+        w = nw
+    bm.free()
+    n = 0
+    for v in o.data.vertices:
+        t = w[v.index]
+        if t <= 0.0:
+            continue
+        old = {g.group: g.weight for g in v.groups if g.group != head}
+        h = next((g.weight for g in v.groups if g.group == head), 0.0)
+        for k, x in old.items():
+            o.vertex_groups[k].add([v.index], x * (1 - t), "REPLACE")
+        o.vertex_groups[head].add([v.index], h * (1 - t) + t, "REPLACE")
+        n += 1
+    return n
+
+
+def place_eyes(o, eyes, push=0.006):
+    """Move each eye centre onto the face surface along -Y (front), so the glow quads sit on it."""
+    from mathutils.bvhtree import BVHTree
+    bvh = BVHTree.FromObject(o, bpy.context.evaluated_depsgraph_get())
+    Mi = o.matrix_world.inverted()
+    out = {}
+    for k, p in eyes.items():
+        origin = Mi @ (Vector(p) + Vector((0, -0.5, 0)))
+        hit, _, _, _ = bvh.ray_cast(origin, Vector((0, 1, 0)))
+        out[k] = tuple(o.matrix_world @ hit + Vector((0, -push, 0))) if hit else p
+    return out
+
+
+def rig_auto(glb, name, out_json, template_json, keep_stump=False):
+    """
+    Tripo retopology GLB -> rigged greydwarf-family body, no hand tuning: import at the vanilla
+    height, weld seam duplicates, find the eyes, measure the arms, fit and export. keep_stump=False
+    when the body has its own trunk on top (the vanilla stump is hidden).
+    """
+    import bmesh
+    rig = bpy.data.objects[RIG]
+    for pb in rig.pose.bones:
+        pb.matrix_basis.identity()
+    for n in (name, RIG + "_fit"):
+        if n in bpy.data.objects:
+            bpy.data.objects.remove(bpy.data.objects[n], do_unlink=True)
+    old = bpy.data.collections.get("GL_" + name)
+    if old:
+        for x in list(old.objects):
+            bpy.data.objects.remove(x, do_unlink=True)
+        bpy.data.collections.remove(old)
+    o, _ = import_auto(glb, name, "Gen_" + name)
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    bm.to_mesh(o.data)
+    bm.free()
+    eyes = place_eyes(o, eye_centres(o))
+    ps = [o.matrix_world @ v.co for v in o.data.vertices]
+    arm = [p for p in ps if 0.6 < abs(p.x) < 0.9]
+    arm_z = sum(p.z for p in arm) / len(arm)
+    reach = max(p.x for p in ps)
+    T = fit_targets(arm_dy=sum(p.y for p in arm) / len(arm) - VANILLA_ARM[0],
+                    arm_dz=sum(p.z for p in arm) / len(arm) - VANILLA_ARM[1],
+                    arm_scale=(reach - 0.17) / (1.252 - 0.17))
+    info = rig_body(o, name, eyes, out_json, template_json, T, keep_stump=keep_stump, eye_push=0.0,
+                    head_fn=lambda g: head_to_head(g, eyes, arm_z))
+    info["eyes"] = eyes
     return info

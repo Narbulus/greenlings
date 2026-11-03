@@ -255,6 +255,7 @@ namespace Greenlings
                 b.Expand(b.size * 0.3f); // rounder body and leaves stick out a bit further
                 smr.localBounds = b;
                 if (IsSkin(smr) && body.texture) SetSkin(smr, body.texture);
+                else if (!IsSkin(smr)) SetEyeGlow(smr, true);
             }
             _g.InvalidateTint();
             _g.Event("model", "look=greenling body=" + body.name);
@@ -268,12 +269,29 @@ namespace Greenlings
                     kv.Key.sharedMesh = kv.Value.mesh;
                     kv.Key.localBounds = kv.Value.bounds;
                     if (IsSkin(kv.Key)) SetSkin(kv.Key, null);
+                    else SetEyeGlow(kv.Key, false);
                 }
             _g.InvalidateTint();
             if (_applied >= 0) _g.Event("model", "look=vanilla");
         }
 
         private static bool IsSkin(Renderer r) => r.sharedMaterial && r.sharedMaterial.shader.name == "Custom/Creature"; // not the eyes
+
+        /// <summary>Remodelled bodies glow soft pale yellow from the eyes, whatever the creature's vanilla eye colour.</summary>
+        private static readonly Color EyeColor = new Color(1f, 0.85f, 0.45f), EyeGlow = new Color(2.6f, 2.0f, 0.8f);
+
+        private static void SetEyeGlow(Renderer r, bool remodel)
+        {
+            var block = new MaterialPropertyBlock();
+            r.GetPropertyBlock(block);
+            if (remodel)
+            {
+                block.SetColor("_Color", EyeColor);
+                block.SetColor("_EmissionColor", EyeGlow);
+            }
+            else block.Clear();
+            r.SetPropertyBlock(block);
+        }
 
         private static Texture2D _flatNormal;
         private static bool _loggedProps;
