@@ -63,7 +63,6 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   full mode + retopo face_limit=500. `greenling_props.wrap` stands a prop on the body and walks each
   root along the skin so it bends with the body's curve; the trunk stays rigid; one bone each.
 - Hand placement: `prop_studio.register(repo)` adds View3D > sidebar > Greenlings > Prop Studio.
-  The prop (or edited decoration piece) follows the 3D cursor; no Anchor click needed.
   Placements save to tools/props/placements.json in vanilla bind-pose coordinates (fit every variant).
 - Root wrapping is done with a rig (`greenling_props.rig_prop`): a trunk bone plus a 7-bone chain (shorter toward the tip)
   along each root's underside, automatic weights; `wrap` poses each chain onto the skin and bakes it.
@@ -96,6 +95,10 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   `droop`, broad side across the flow, small random roll. Normals are re-oriented away from the
   body axis first: generated meshes have flipped faces and leaves stabbed out the far side.
   Trunks only on the back; no mushrooms/twigs on the face/crown.
-- Decorate panel: a props list (tick + weight per prop) feeds both Decorate and the Paint brush
-  (click/drag on the body to place from the list, Ctrl+click erase, Ctrl+Z undo, Esc done).
-  `decorate.place` is the one placement path for both.
+- Prop Studio is one panel: a props list (tick + weight) feeds Place (at the 3D cursor), Paint
+  (click/drag, Ctrl+click erase, Ctrl+Z undo, Esc) and Decorate (replaces only its own `auto` pieces).
+  Every piece sits in Decor; selecting one makes it the edited piece (sliders live, Shift+right-click
+  or G moves it and re-wraps it). `decorate.place` / `prop_studio.build_piece` are the placement paths.
+- Root weights are geometric, not heat: heat weighting failed on generated trunks and left root tips
+  on the trunk bone (they stuck out instead of wrapping). Root band vertices go to the nearest chain's
+  two nearest bones, fading into the trunk at the wall.

@@ -187,15 +187,17 @@ def run(body, opts=None):
     opts = {**DEFAULTS, **(opts or {})}
     rnd = random.Random(opts["seed"])
     coll = decor_collection()
-    for o in list(coll.objects):
+    # replace only earlier procedural pieces; hand-placed and painted ones stay (and are avoided)
+    for o in [o for o in coll.objects if o.get("auto")]:
         bpy.data.objects.remove(o, do_unlink=True)
+    kept = list(coll.objects)
     pts = _surface_points(body, opts["zones"], rnd)
     rnd.shuffle(pts)
     palette = [(n, w) for n, w in (opts.get("palette") or default_palette(opts)) if w > 0 and n in bpy.data.objects]
     if not palette or not pts:
         return []
-    placed, trees, centres = [], [], []
-    trunks = 0
+    placed, trees, centres = [], [_bvh(o) for o in kept], [o.matrix_world.translation.copy() for o in kept]
+    trunks = sum(kind_of(o.get("studio", {}).get("prop", "")) == "trunk" for o in kept)
     for p, nrm, zone in pts:
         if len(placed) >= opts["count"]:
             break
@@ -207,7 +209,11 @@ def run(body, opts=None):
         if not ok:
             continue
         prop = bpy.data.objects[rnd.choices([n for n, _ in ok], [w for _, w in ok])[0]]
-        o = place(prop, body, p, nrm, rnd, opts, f"D{len(placed):02d}_{prop.name}")
+        k = len(placed)
+        while f"D{k:02d}_{prop.name}" in bpy.data.objects:
+            k += 1
+        o = place(prop, body, p, nrm, rnd, opts, f"D{k:02d}_{prop.name}")
+        o["auto"] = 1
         t = _bvh(o)
         if any(t.overlap(u) for u in trees):
             bpy.data.objects.remove(o, do_unlink=True)

@@ -175,30 +175,31 @@ def rig_prop(prop, segments=7):
     rig.select_set(True)
     bpy.context.view_layer.objects.active = rig
     prop.vertex_groups.clear()
-    bpy.ops.object.parent_set(type="ARMATURE_AUTO")
-    # heat weighting can miss parts of a generated mesh: give those to the nearest bone
-    names = [b.name for b in arm.bones]
+    bpy.ops.object.parent_set(type="ARMATURE_NAME")
+    # weights by geometry, not heat: heat weighting fails on these generated meshes ("failed to find a
+    # solution") and left root tips on the trunk bone, so they stuck out instead of bending. Above the
+    # base band (trunk, branches, leaf cards) and inside the trunk wall: trunk bone. Root band: the
+    # nearest root chain, split between its two nearest bones, fading into the trunk at the wall.
+    chains = {}
+    for bn in arm.bones:
+        if bn.name.startswith("root"):
+            chains.setdefault(bn.name.split("_")[0], []).append(bn)
+    groups = {bn.name: prop.vertex_groups.get(bn.name) or prop.vertex_groups.new(name=bn.name) for bn in arm.bones}
     for v in prop.data.vertices:
-        if not any(g.weight > 0 for g in v.groups):
-            best = min(arm.bones, key=lambda b: _seg_dist(v.co, b.head_local, b.tail_local))
-            (prop.vertex_groups.get(best.name) or prop.vertex_groups.new(name=best.name)).add([v.index], 1.0, "REPLACE")
-    if trunk_r < 0.1 * top:
-        # thin props (twigs): heat weights bleed between neighbouring chains; give each root-band
-        # vertex to its nearest bone outright
-        for g in list(prop.vertex_groups):
-            prop.vertex_groups.remove(g)
-        for v in prop.data.vertices:
-            best = min(arm.bones, key=lambda b: _seg_dist(v.co, b.head_local, b.tail_local))
-            (prop.vertex_groups.get(best.name) or prop.vertex_groups.new(name=best.name)).add([v.index], 1.0, "REPLACE")
-    # everything above the roots (trunk, branches, leaf cards: loose pieces heat weighting can't
-    # reach) rides the trunk bone only
-    tg = prop.vertex_groups.get("trunk") or prop.vertex_groups.new(name="trunk")
-    hi = [v.index for v in prop.data.vertices if v.co.z > ROOT_BAND * top
-          or Vector((v.co.x, v.co.y)).length < 0.9 * trunk_r]
-    for g in prop.vertex_groups:
-        if g != tg:
-            g.remove(hi)
-    tg.add(hi, 1.0, "REPLACE")
+        r = Vector((v.co.x, v.co.y)).length
+        if v.co.z > ROOT_BAND * top or r < 0.9 * trunk_r or not chains:
+            groups["trunk"].add([v.index], 1.0, "REPLACE")
+            continue
+        dist = {bn.name: _seg_dist(v.co, bn.head_local, bn.tail_local) for bones in chains.values() for bn in bones}
+        chain = min(chains.values(), key=lambda bones: min(dist[bn.name] for bn in bones))
+        b1, b2 = sorted(chain, key=lambda bn: dist[bn.name])[:2] if len(chain) > 1 else (chain[0], chain[0])
+        w1, w2 = 1 / (dist[b1.name] + 1e-4), 1 / (dist[b2.name] + 1e-4)
+        root_w = max(0.0, min(1.0, (r - 0.9 * trunk_r) / (0.6 * trunk_r)))
+        groups[b1.name].add([v.index], root_w * w1 / (w1 + w2), "ADD")
+        if b2 != b1:
+            groups[b2.name].add([v.index], root_w * w2 / (w1 + w2), "ADD")
+        if root_w < 1:
+            groups["trunk"].add([v.index], 1 - root_w, "ADD")
     prop.parent = None
     for m in [m for m in prop.modifiers if m.type == "ARMATURE"]:
         prop.modifiers.remove(m)
