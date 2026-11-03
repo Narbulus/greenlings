@@ -78,3 +78,7 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
 - Prop set (Blender scene "Props" collection): trunk_flat2, trunk_lean2, mush_a, twig_a, twig_leafy,
   leaf_{bush,spray,beech}_{1,tuft}. Everything above a prop's roots rides its trunk bone (loose leaf
   cards would otherwise get root weights and fly off).
+- Texel density: the vanilla greydwarf body is ~62 texels per unit (128px texture, point-filtered):
+  that IS the Valheim pixel look. Match it: body skins ship at 128px (bake big, then downscale the
+  final skin; 1024px was ~8x too fine), leaf cards sample a texture window sized for 62 px/unit
+  (`greenling_props.TEXEL_DENSITY`). Check new assets with the density measure before shipping.

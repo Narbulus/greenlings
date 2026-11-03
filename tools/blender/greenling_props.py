@@ -348,17 +348,29 @@ def _vanilla_leaf_material(path, kind):
     return m
 
 
-def make_vanilla_leaves(name, tex_dir, kind="spray", count=1, size=0.22, spread=80.0, droop=20.0):
+TEXEL_DENSITY = 62.0   # texels per unit on the vanilla greydwarf body (128px texture): match it everywhere
+
+
+def make_vanilla_leaves(name, tex_dir, kind="spray", count=1, size=0.22, spread=80.0, droop=20.0, seed=0):
     """Leaf prop from a vanilla foliage texture: `count` cards fanned from a base point at the origin.
-    Each card is a pointed shape (wide at the top, pointed at the base) so it tucks into the body."""
+    Each card is a pointed shape (wide at the top, pointed at the base) so it tucks into the body, and
+    shows a window of the texture sized for TEXEL_DENSITY (the vanilla body's pixel size), picked
+    from the leafy part with some randomness, so leaves read as chunky as the rest of the creature."""
+    import random
+    rnd = random.Random(seed)
     import bmesh
     import os
-    tex, (u0, v0, u1, v1), _ = VANILLA_LEAVES[kind]
-    aspect = (u1 - u0) / (v1 - v0)
+    tex, (U0, V0, U1, V1), _ = VANILLA_LEAVES[kind]
+    tex_px = 64
     shape = [(0.0, 0.0), (0.45, 0.35), (0.5, 0.85), (0.15, 1.0), (-0.15, 1.0), (-0.5, 0.85), (-0.45, 0.35)]
     bm = bmesh.new()
     uvl = bm.loops.layers.uv.new("UVMap")
+    span = min(1.0, size * TEXEL_DENSITY / tex_px)          # UV width/height for this card at vanilla density
     for i in range(count):
+        cu = rnd.uniform(U0 + span / 2, max(U0 + span / 2, U1 - span / 2))
+        cv = rnd.uniform(V0 + span / 2, max(V0 + span / 2, V1 - span / 2))
+        u0, v0, u1, v1 = cu - span / 2, cv - span / 2, cu + span / 2, cv + span / 2
+        aspect = 1.0
         a = 0.0 if count == 1 else -spread / 2 + spread * i / (count - 1)
         rot = Matrix.Rotation(math.radians(a), 3, "Y") @ Matrix.Rotation(math.radians(-droop), 3, "X")
         w, h = size * aspect, size
