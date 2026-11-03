@@ -75,6 +75,9 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   .work/model/vanilla_leaves; not committed). Valheim leaf cards are 64px sprays/clusters of many small
   leaves, point-filtered, alpha cut, on pointed (non-square) cards: `make_vanilla_leaves`. A generated
   "single big leaf" texture looked nothing like Valheim. In game, borrow the vanilla material at runtime.
+- Root rigs only take vertices in the flat base band (ROOT_BAND = 20% of height); the trunk radius is
+  measured just above it. Measuring mid-height broke multi-stalk props (mushroom stalks, twig branches
+  counted as roots and bent onto the skin).
 - Prop set (Blender scene "Props" collection): trunk_flat2, trunk_lean2, mush_a, twig_a, twig_leafy,
   leaf_{bush,spray,beech}_{1,tuft}. Everything above a prop's roots rides its trunk bone (loose leaf
   cards would otherwise get root weights and fly off).

@@ -98,13 +98,18 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
 
 # ---------------------------------------------------------------- root rig
 
+ROOT_BAND = 0.2   # fraction of the prop's height that counts as the flat root band
+
+
 def _root_layout(prop):
     """Trunk radius, root directions (angles) and each root's underside line from the prop mesh."""
     src = prop.data.vertices
     top = max(v.co.z for v in src)
-    mid = [Vector((v.co.x, v.co.y)).length for v in src if 0.45 * top < v.co.z < 0.8 * top]
+    band = ROOT_BAND * top     # roots lie flat at the base: only this band can be root
+    # trunk radius just above the roots (higher up, stalks or branches spread apart)
+    mid = [Vector((v.co.x, v.co.y)).length for v in src if band < v.co.z < 2.2 * band]
     trunk_r = sorted(mid)[len(mid) // 2] if mid else 0.1 * top
-    root_vs = [v.co for v in src if v.co.z < 0.5 * top and Vector((v.co.x, v.co.y)).length > trunk_r]
+    root_vs = [v.co for v in src if v.co.z < band and Vector((v.co.x, v.co.y)).length > trunk_r]
     hist = [0] * 36
     for c in root_vs:
         if Vector((c.x, c.y)).length > 1.5 * trunk_r:
@@ -172,7 +177,8 @@ def rig_prop(prop, segments=7):
     # everything above the roots (trunk, branches, leaf cards: loose pieces heat weighting can't
     # reach) rides the trunk bone only
     tg = prop.vertex_groups.get("trunk") or prop.vertex_groups.new(name="trunk")
-    hi = [v.index for v in prop.data.vertices if v.co.z > 0.5 * top]
+    hi = [v.index for v in prop.data.vertices if v.co.z > ROOT_BAND * top
+          or Vector((v.co.x, v.co.y)).length < 0.9 * trunk_r]
     for g in prop.vertex_groups:
         if g != tg:
             g.remove(hi)
