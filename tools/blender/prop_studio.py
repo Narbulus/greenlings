@@ -97,6 +97,7 @@ class Settings(bpy.types.PropertyGroup):
     bone: bpy.props.EnumProperty(name="Bone", items=[(b, b, "") for b in ("spine3", "spine2", "spine1", "head",
                                  "l_arm1", "r_arm1", "l_shoulder", "r_shoulder")], update=_upd)
     save_name: bpy.props.StringProperty(name="Name", default="trunk_back")
+    editing: bpy.props.StringProperty(default="")   # name of the decoration piece being re-edited
     # procedural decoration
     d_seed: bpy.props.IntProperty(name="Seed", default=1, min=0)
     d_count: bpy.props.IntProperty(name="Count", default=10, min=1, max=60)
@@ -184,6 +185,59 @@ class PS_OT_delete(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class PS_OT_edit_piece(bpy.types.Operator):
+    bl_idname = "prop_studio.edit_piece"
+    bl_label = "Edit selected"
+    bl_description = "Load the selected decoration (trunk/mushroom/twig) into the sliders; Apply replaces it"
+
+    def execute(self, context):
+        o = context.active_object
+        s = context.scene.prop_studio
+        c = o.get("studio") if o else None
+        if not c:
+            self.report({"ERROR"}, "select a wrapped decoration piece (leaves: move/rotate them directly)")
+            return {"CANCELLED"}
+        c = c.to_dict()
+        rebuild.busy = True
+        try:
+            s.prop = bpy.data.objects[c["prop"]]
+            s.anchor, s.hint, s.spin, s.scale = c["anchor"], c["hint"], c["spin"], c["scale"]
+            s.sink, s.upright, s.lean, s.tilt = c["sink"], c["upright"], c["lean"], c["tilt"]
+            s.roots, s.offset, s.has_anchor, s.editing = c["roots"], c["offset"], True, o.name
+        finally:
+            rebuild.busy = False
+        o.hide_set(True)
+        rebuild()
+        return {"FINISHED"}
+
+
+class PS_OT_apply_piece(bpy.types.Operator):
+    bl_idname = "prop_studio.apply_piece"
+    bl_label = "Apply"
+    bl_description = "Replace the piece being edited with the current preview"
+
+    def execute(self, context):
+        s = context.scene.prop_studio
+        old = bpy.data.objects.get(s.editing)
+        pv = bpy.data.objects.get(PREVIEW)
+        if not (old and pv):
+            return {"CANCELLED"}
+        name, colls = old.name, list(old.users_collection)
+        bpy.data.objects.remove(old, do_unlink=True)
+        for c in list(pv.users_collection):
+            c.objects.unlink(pv)
+        for c in colls:
+            c.objects.link(pv)
+        pv.name = name
+        pv["studio"] = {"prop": s.prop.name, "anchor": list(s.anchor), "hint": list(s.hint), "spin": s.spin,
+                        "scale": s.scale, "sink": s.sink, "upright": s.upright, "lean": list(s.lean),
+                        "tilt": list(s.tilt), "roots": s.roots, "offset": s.offset}
+        import decorate
+        decorate._origin_at(pv, Vector(s.anchor))
+        s.editing = ""
+        return {"FINISHED"}
+
+
 class PS_OT_decorate(bpy.types.Operator):
     bl_idname = "prop_studio.decorate"
     bl_label = "Decorate"
@@ -237,6 +291,11 @@ class PS_PT_decorate(bpy.types.Panel):
         row.operator("prop_studio.decorate", icon="OUTLINER_OB_POINTCLOUD")
         row.operator("prop_studio.reroll", text="", icon="FILE_REFRESH")
         row.operator("prop_studio.clear_decor", text="", icon="TRASH")
+        row = col.row()
+        row.operator("prop_studio.edit_piece", icon="GREASEPENCIL")
+        if s.editing:
+            row.operator("prop_studio.apply_piece", icon="CHECKMARK")
+            col.label(text="Editing " + s.editing + " (sliders above)")
         col.prop(s, "d_seed")
         col.prop(s, "d_count")
         col.prop(s, "d_gap")
@@ -279,7 +338,8 @@ class PS_PT_panel(bpy.types.Panel):
         row.operator("prop_studio.delete", text="", icon="TRASH")
 
 
-CLASSES = (Settings, PS_OT_anchor, PS_OT_save, PS_OT_load, PS_OT_delete, PS_OT_decorate, PS_OT_reroll,
+CLASSES = (Settings, PS_OT_anchor, PS_OT_save, PS_OT_load, PS_OT_delete, PS_OT_edit_piece, PS_OT_apply_piece,
+           PS_OT_decorate, PS_OT_reroll,
            PS_OT_clear_decor, PS_PT_panel, PS_PT_decorate)
 
 

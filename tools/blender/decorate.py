@@ -109,6 +109,12 @@ def _place_leaf(prop, body, p, nrm, rnd, opts, name):
     return o
 
 
+def _origin_at(o, p):
+    """Put the object's origin at its base point so rotate/scale by hand pivot where it grows from."""
+    o.data.transform(Matrix.Translation(-p))
+    o.matrix_world = Matrix.Translation(p)
+
+
 def run(body, opts=None):
     opts = {**DEFAULTS, **(opts or {})}
     rnd = random.Random(opts["seed"])
@@ -144,12 +150,17 @@ def run(body, opts=None):
             for c in o.users_collection:
                 c.objects.unlink(o)
         else:
-            o = gp.wrap(prop, body, tuple(p), hint=tuple(nrm), spin=rnd.uniform(-180, 180), name=nm,
-                        scale=rnd.uniform(0.7, 1.0) * (0.85 if kind == "trunk" else 1.0), sink=0.03, upright=0.6,
-                        lean=(0, 0, 0), roots=True)
+            spin = rnd.uniform(-180, 180)
+            scale = rnd.uniform(0.7, 1.0) * (0.85 if kind == "trunk" else 1.0)
+            o = gp.wrap(prop, body, tuple(p), hint=tuple(nrm), spin=spin, name=nm,
+                        scale=scale, sink=0.03, upright=0.6, lean=(0, 0, 0), roots=True)
             for c in list(o.users_collection):
                 c.objects.unlink(o)
         coll.objects.link(o)
+        if kind not in ("leaf", "tuft"):
+            o["studio"] = {"prop": prop.name, "anchor": list(p), "hint": list(nrm), "spin": spin, "scale": scale,
+                           "sink": 0.03, "upright": 0.6, "lean": [0, 0], "tilt": [0, 0], "roots": True, "offset": 0.008}
+        _origin_at(o, p)
         t = _bvh(o)
         if any(t.overlap(u) for u in trees):
             bpy.data.objects.remove(o, do_unlink=True)
