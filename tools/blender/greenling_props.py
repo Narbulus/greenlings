@@ -57,7 +57,7 @@ def import_prop(glb, name, height=0.42):
 
 
 def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine3",
-         name=None, scale=1.0, sink=0.03, upright=0.75, lean=(0, 0.25, 0)):
+         name=None, scale=1.0, sink=0.03, upright=0.75, lean=(0, 0.25, 0), roots=True):
     """Place `prop` on `body` at `anchor` and wrap its roots onto the skin. Returns the new object."""
     dg = bpy.context.evaluated_depsgraph_get()
     bvh = BVHTree.FromObject(body, dg)
@@ -89,7 +89,7 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
     for v in o.data.vertices:
         p = T @ v.co
         r = Vector((v.co.x, v.co.y)).length * scale
-        if v.co.z > 0.5 * top or r <= trunk_r * scale:
+        if not roots or v.co.z > 0.5 * top or r <= trunk_r * scale:
             v.co = p
             continue
         t = min(1.0, (r - trunk_r * scale) / (trunk_r * scale))
@@ -110,4 +110,66 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
     o.data.update()
     o.vertex_groups.clear()
     o.vertex_groups.new(name=bone).add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
+    return o
+
+
+
+# ---------------------------------------------------------------- leaf cards ("feathers")
+
+LEAVES = ("willow", "beech", "birch", "oak")   # cells of tools/props/leaf_atlas.png
+
+
+def _leaf_material(atlas):
+    m = bpy.data.materials.get("LeafCard")
+    if m:
+        return m
+    m = bpy.data.materials.new("LeafCard")
+    m.use_nodes = True
+    nt = m.node_tree
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(atlas, check_existing=True)
+    tex.interpolation = "Closest"
+    bsdf = nt.nodes["Principled BSDF"]
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+    nt.nodes.active = tex
+    m.blend_method = "CLIP" if hasattr(m, "blend_method") else None
+    m.use_backface_culling = False
+    return m
+
+
+def _card(bm, uvl, cell, length, at=Vector(), rot=Matrix.Identity(3)):
+    """One leaf card: a pointed 5-sided shape (base, two shoulders, tip, cut corners) fitted to the
+    leaf's box in the atlas, so the alpha cut-out has little empty card around it. Base at `at`,
+    pointing along rot's +Z, flat in its XZ plane."""
+    u0, v0, u1, v1 = cell
+    w = length * (u1 - u0) / (v1 - v0)
+    shape = [(0.0, 0.0), (0.5, 0.18), (0.5, 0.72), (0.0, 1.0), (-0.5, 0.72), (-0.5, 0.18)]
+    verts = [bm.verts.new(at + rot @ Vector((x * w, 0, y * length))) for x, y in shape]
+    f = bm.faces.new(verts)
+    for l, (x, y) in zip(f.loops, shape):
+        l[uvl].uv = (u0 + (x + 0.5) * (u1 - u0), v0 + y * (v1 - v0))
+    return f
+
+
+def make_leaves(name, atlas, cells, kind="beech", count=1, length=0.16, spread=70.0, droop=25.0):
+    """
+    A leaf prop: `count` cards of one leaf kind fanned out from a shared base point at the origin
+    (pointing up, +Z), `spread` degrees across, each tipped back by `droop`. count=1 is a single
+    feather; 3-6 make a tuft. Mixed kinds: call per kind and join, or pass kind="mixed".
+    """
+    import bmesh
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new("UVMap")
+    for i in range(count):
+        k = LEAVES[i % 4] if kind == "mixed" else kind
+        a = 0.0 if count == 1 else -spread / 2 + spread * i / (count - 1)
+        rot = (Matrix.Rotation(math.radians(a), 3, "Y") @ Matrix.Rotation(math.radians(-droop), 3, "X"))
+        _card(bm, uvl, cells[LEAVES.index(k)], length * (1.0 - 0.15 * abs(a) / max(spread, 1)), Vector((0, i * 0.002, 0)), rot)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(o)
+    me.materials.append(_leaf_material(atlas))
     return o

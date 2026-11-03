@@ -40,7 +40,7 @@ def _save_all(d):
 
 
 def _is_prop(self, o):
-    return o.type == "MESH" and o.name != PREVIEW and not o.name.startswith("GL_")
+    return o.type == "MESH" and o.name != PREVIEW and o.name.startswith(("trunk_", "leaf_", "mush", "twig"))
 
 
 def _is_body(self, o):
@@ -60,7 +60,7 @@ def rebuild(self=None, context=None):
         return
     o = gp.wrap(s.prop, s.body, tuple(s.anchor), hint=tuple(s.hint), spin=s.spin, offset=s.offset,
                 bone=s.bone, name=PREVIEW, scale=s.scale, sink=s.sink, upright=s.upright,
-                lean=(s.lean[0], s.lean[1], 0.0))
+                lean=(s.lean[0], s.lean[1], 0.0), roots=s.roots)
     o.hide_set(False)
     o.hide_render = False
 
@@ -90,6 +90,8 @@ class Settings(bpy.types.PropertyGroup):
                                   description="How far the base sits into the body")
     offset: bpy.props.FloatProperty(name="Root offset", default=0.008, min=0, max=0.05, update=_upd,
                                     description="Gap between roots and skin")
+    roots: bpy.props.BoolProperty(name="Wrap roots", default=True, update=_upd,
+                                  description="Bend the prop's spread-out base onto the skin (off: rigid)")
     bone: bpy.props.EnumProperty(name="Bone", items=[(b, b, "") for b in ("spine3", "spine2", "spine1", "head",
                                  "l_arm1", "r_arm1", "l_shoulder", "r_shoulder")], update=_upd)
     save_name: bpy.props.StringProperty(name="Name", default="trunk_back")
@@ -121,7 +123,7 @@ class PS_OT_save(bpy.types.Operator):
         d[s.save_name] = {"prop": s.prop.name, "anchor": [round(x, 4) for x in s.anchor],
                           "hint": [round(x, 3) for x in s.hint], "spin": round(s.spin, 2), "scale": round(s.scale, 3),
                           "upright": round(s.upright, 3), "lean": [round(x, 3) for x in s.lean], "sink": round(s.sink, 4),
-                          "offset": round(s.offset, 4), "bone": s.bone}
+                          "offset": round(s.offset, 4), "bone": s.bone, "roots": s.roots}
         _save_all(d)
         s.saved = s.save_name
         self.report({"INFO"}, f"saved {s.save_name} to {_path()}")
@@ -143,6 +145,7 @@ class PS_OT_load(bpy.types.Operator):
                 s.prop = bpy.data.objects[c["prop"]]
             s.anchor, s.hint, s.spin, s.scale = c["anchor"], c["hint"], c["spin"], c["scale"]
             s.upright, s.lean, s.sink, s.offset, s.bone = c["upright"], c["lean"], c["sink"], c["offset"], c["bone"]
+            s.roots = c.get("roots", True)
             s.has_anchor, s.save_name = True, s.saved
         finally:
             rebuild.busy = False
@@ -176,7 +179,7 @@ class PS_PT_panel(bpy.types.Panel):
         if s.has_anchor:
             col.label(text="Anchor %.2f %.2f %.2f" % tuple(s.anchor))
         box = col.box()
-        for k in ("spin", "scale", "upright", "lean", "sink", "offset", "hint", "bone"):
+        for k in ("spin", "scale", "upright", "lean", "sink", "roots", "offset", "hint", "bone"):
             box.prop(s, k)
         row = col.row()
         row.prop(s, "save_name")
