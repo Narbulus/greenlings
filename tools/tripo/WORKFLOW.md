@@ -58,7 +58,15 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   the brute's club and flower are separate rigid meshes: props are the vanilla way.
 - Don't drive the dev game while the user is playing in it (check before cam/screenshot batches).
 
-## 5. Props (`greenling_props.py`, `prop_studio.py`)
+## 5. Props
+- To the game: Prop Studio > Export to game bakes the picked body's decoration into its model file
+  (models/<prefab>/<name>.glmesh + <name>.decor.png in the dev profile; `decor_export.py`), then
+  `gl_model reload` in game. Pieces merge per (bone, material) into static meshes in bone-local space:
+  in game they are MeshRenderers parented to the bones (no skinning, ~2 draw calls per greenling).
+  Props share the creature material with a per-body atlas (no mipmaps); leaf cards use the game's own
+  foliage material found by texture name. Each body has its own "Decor <body>" collection. The death
+  ragdoll gets the same body and decoration (Character/Humanoid.OnRagdollCreated, gl_rbody on its ZDO
+  for the other clients; bones remapped by name if the ragdoll lists them in another order). (`greenling_props.py`, `prop_studio.py`)
 - Trunk props: generate from the vanilla stump's own views with roots spread FLAT (3-4 roots max),
   full mode + retopo face_limit=500. `greenling_props.wrap` stands a prop on the body and walks each
   root along the skin so it bends with the body's curve; the trunk stays rigid; one bone each.

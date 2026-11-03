@@ -144,7 +144,7 @@ def place(prop, body, p, nrm, rnd, opts, name, spin=None, scale=None):
     """One decoration piece at surface point p (outward normal nrm), linked into the Decor collection,
     origin at its base, its settings stored on it for re-editing (o["leaf"] / o["studio"])."""
     opts = {**DEFAULTS, **opts}
-    coll = decor_collection()
+    coll = decor_collection(body)
     if kind_of(prop.name) in ("leaf", "tuft"):
         o = _place_leaf(prop, body, p, nrm, rnd, opts, name)
     else:
@@ -163,10 +163,25 @@ def place(prop, body, p, nrm, rnd, opts, name, spin=None, scale=None):
     return o
 
 
-def decor_collection():
-    coll = bpy.data.collections.get("Decor") or bpy.data.collections.new("Decor")
-    if coll.name not in bpy.context.scene.collection.children:
-        bpy.context.scene.collection.children.link(coll)
+def decor_name(body):
+    """Each body keeps its own decoration: collection "Decor <body collection>" inside "Decor"."""
+    return "Decor " + (body.users_collection[0].name if body.users_collection else body.name)
+
+
+def decor_collection(body=None):
+    """The decoration collection of `body` (default: the Prop Studio body)."""
+    root = bpy.data.collections.get("Decor") or bpy.data.collections.new("Decor")
+    if root.name not in bpy.context.scene.collection.children:
+        bpy.context.scene.collection.children.link(root)
+    if body is None:
+        s = getattr(bpy.context.scene, "prop_studio", None)
+        body = s.body if s else None
+    if body is None:
+        return root
+    name = decor_name(body)
+    coll = bpy.data.collections.get(name) or bpy.data.collections.new(name)
+    if coll.name not in root.children:
+        root.children.link(coll)
     return coll
 
 
@@ -186,7 +201,7 @@ def run(body, opts=None):
     the back (at most max_trunks), no mushrooms/twigs on the face/crown."""
     opts = {**DEFAULTS, **(opts or {})}
     rnd = random.Random(opts["seed"])
-    coll = decor_collection()
+    coll = decor_collection(body)
     # replace only earlier procedural pieces; hand-placed and painted ones stay (and are avoided)
     for o in [o for o in coll.objects if o.get("auto")]:
         bpy.data.objects.remove(o, do_unlink=True)

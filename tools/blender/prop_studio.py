@@ -61,6 +61,37 @@ def _saved_items(self, context):
     return [(k, k, "") for k in sorted(_load_all())] or [("", "(none saved)", "")]
 
 
+def _show_body_decor(s):
+    """Only the picked body's decoration is visible (each body keeps its own)."""
+    import decorate
+    root = bpy.data.collections.get("Decor")
+    if not (root and s.body):
+        return
+    mine = decorate.decor_collection(s.body)
+    for c in root.children:
+        c.hide_viewport = c != mine
+        c.hide_render = c != mine
+
+
+# body collection prefix -> game prefab (models/<prefab>/<name>.glmesh, template .work/model/vanilla/<prefab>.json)
+PREFABS = {"GL_GD_": "Greydwarf", "GL_GDv": "Greydwarf"}
+
+
+def game_target(body):
+    """(prefab, model file name) a Blender body exports to: GL_GD_beak -> Greydwarf/beak."""
+    coll = body.users_collection[0].name if body.users_collection else body.name
+    for pre, prefab in sorted(PREFABS.items(), key=lambda kv: -len(kv[0])):
+        if coll.startswith(pre):
+            name = coll[len("GL_GD_"):] if pre == "GL_GD_" else coll[len("GL_"):]
+            return prefab, name.lower()
+    return None, None
+
+
+def models_dir():
+    return os.path.join(os.environ.get("APPDATA", ""), "r2modmanPlus-local", "Valheim", "profiles", "GreenlingsDev",
+                        "BepInEx", "plugins", "Greenlings", "models")
+
+
 def _surface(body, q):
     """Nearest point on the body to q and its outward normal (world space)."""
     import decorate
@@ -163,7 +194,7 @@ class PaletteItem(bpy.types.PropertyGroup):
 
 
 class Settings(bpy.types.PropertyGroup):
-    body: bpy.props.PointerProperty(type=bpy.types.Object, poll=_is_body)
+    body: bpy.props.PointerProperty(type=bpy.types.Object, poll=_is_body, update=lambda self, context: _show_body_decor(self))
     palette: bpy.props.CollectionProperty(type=PaletteItem)
     palette_i: bpy.props.IntProperty(description="The prop Place puts down")
     p_overlap: bpy.props.BoolProperty(name="Avoid overlaps", default=True,
@@ -362,9 +393,10 @@ class PS_OT_paint(bpy.types.Operator):
         self.msg = f"  | no room: blocked by {hit} (Ctrl+click it, or untick Avoid overlaps)"
 
     def _erase(self, context, event):
+        import decorate
         hit = self._hit(context, event)
-        coll = bpy.data.collections.get("Decor")
-        if not hit or not coll or not coll.objects:
+        coll = decorate.decor_collection()
+        if not hit or not coll.objects:
             return
         o = min(coll.objects, key=lambda o: (o.matrix_world.translation - hit[0]).length)
         if (o.matrix_world.translation - hit[0]).length < 0.15:
@@ -421,6 +453,31 @@ class PS_OT_paint(bpy.types.Operator):
             self._status(context)
             return {"RUNNING_MODAL"}
         return {"PASS_THROUGH"}
+
+
+class PS_OT_export(bpy.types.Operator):
+    bl_idname = "prop_studio.export"
+    bl_label = "Export to game"
+    bl_description = ("Bake this body's decoration into its game model (models/<prefab>/<name>.glmesh + .decor.png). "
+                      "In game: gl_model reload")
+
+    def execute(self, context):
+        import decor_export
+        import decorate
+        s = context.scene.prop_studio
+        prefab, name = game_target(s.body) if s.body else (None, None)
+        if not prefab:
+            self.report({"ERROR"}, "pick a body that has a game model (GL_GD_<name>)")
+            return {"CANCELLED"}
+        path = os.path.join(models_dir(), prefab, name + ".glmesh")
+        template = os.path.join(_repo, ".work", "model", "vanilla", prefab + ".json")
+        if not os.path.exists(path):
+            self.report({"ERROR"}, "no game model at " + path)
+            return {"CANCELLED"}
+        pieces = [o for o in decorate.decor_collection(s.body).objects if o.type == "MESH"]
+        rep = decor_export.export(s.body, template, path, pieces)
+        self.report({"INFO"}, f"{prefab}/{name}: {len(pieces)} pieces -> {rep} (in game: gl_model reload)")
+        return {"FINISHED"}
 
 
 class PS_OT_delete_piece(bpy.types.Operator):
@@ -522,13 +579,12 @@ class PS_OT_reroll(bpy.types.Operator):
 
 class PS_OT_clear_decor(bpy.types.Operator):
     bl_idname = "prop_studio.clear_decor"
-    bl_label = "Clear all pieces"
+    bl_label = "Clear this body's pieces"
 
     def execute(self, context):
-        c = bpy.data.collections.get("Decor")
-        if c:
-            for o in list(c.objects):
-                bpy.data.objects.remove(o, do_unlink=True)
+        import decorate
+        for o in list(decorate.decor_collection().objects):
+            bpy.data.objects.remove(o, do_unlink=True)
         context.scene.prop_studio.editing = ""
         return {"FINISHED"}
 
@@ -576,6 +632,11 @@ class PS_PT_panel(bpy.types.Panel):
         row.prop(s, "saved", text="")
         row.operator("prop_studio.load", text="", icon="IMPORT")
         row.operator("prop_studio.delete", text="", icon="TRASH")
+        prefab, name = game_target(s.body) if s.body else (None, None)
+        row = col.row()
+        row.enabled = prefab is not None
+        row.operator("prop_studio.export", text=f"Export to game ({prefab}/{name})" if prefab else "Export to game",
+                     icon="EXPORT")
 
 
 class PS_PT_decorate(bpy.types.Panel):
@@ -617,7 +678,7 @@ class PS_PT_defaults(bpy.types.Panel):
 
 
 CLASSES = (PaletteItem, Settings, PS_OT_palette_fill, PS_OT_palette_add, PS_OT_palette_remove, PS_UL_palette,
-           PS_OT_place, PS_OT_paint, PS_OT_delete_piece, PS_OT_save, PS_OT_load, PS_OT_delete,
+           PS_OT_place, PS_OT_paint, PS_OT_export, PS_OT_delete_piece, PS_OT_save, PS_OT_load, PS_OT_delete,
            PS_OT_decorate, PS_OT_reroll, PS_OT_clear_decor, PS_PT_panel, PS_PT_decorate, PS_PT_defaults)
 
 
