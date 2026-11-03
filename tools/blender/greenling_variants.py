@@ -715,7 +715,9 @@ def import_auto(glb, name, coll_name):
         return max(zs) - min(zs) if zs else 0.0
     tl, tr = thickness(1, left), thickness(-1, right)
     held = "r" if tr > tl * 1.5 else "l" if tl > tr * 1.5 else None
-    scale = HEIGHT / h
+    # scale by shoulder height (arms at vanilla 1.21): a trunk or anything on the head must not shrink the body
+    arm = [p for p in ps if abs(p.x - cx) > 0.55 * max(left, right)]
+    scale = 1.21 / ((sum(p.z for p in arm) / len(arm)) - zmin) if arm else HEIGHT / h
     for v in o.data.vertices:
         v.co = Vector(((v.co.x - cx) * scale, (v.co.y - cy) * scale, gt.GROUND_Z + (v.co.z - zmin) * scale))
     o.data.update()
