@@ -115,7 +115,13 @@ def _root_layout(prop):
         if Vector((c.x, c.y)).length > 1.5 * trunk_r:
             hist[int((math.atan2(c.y, c.x) + math.pi) / (2 * math.pi) * 36) % 36] += 1
     peaks = [i for i in range(36) if hist[i] > 2 and hist[i] >= hist[i - 1] and hist[i] >= hist[(i + 1) % 36]]
-    dirs = [(i + 0.5) / 36 * 2 * math.pi - math.pi for i in sorted(peaks, key=lambda i: -hist[i])[:5]]
+    # strongest peaks first, at least 45 degrees apart, 4 roots at most (a stray spike next to a real
+    # root made a second chain fighting over the same vertices and crumpled thin bases)
+    chosen = []
+    for i in sorted(peaks, key=lambda i: -hist[i]):
+        if len(chosen) < 4 and all(min(abs(i - j), 36 - abs(i - j)) >= 5 for j in chosen):
+            chosen.append(i)
+    dirs = [(i + 0.5) / 36 * 2 * math.pi - math.pi for i in chosen]
     roots = []
     for ang in dirs:
         d2 = Vector((math.cos(ang), math.sin(ang)))
@@ -128,6 +134,8 @@ def _root_layout(prop):
             near = [c.z for c in mine if abs(Vector((c.x, c.y)).dot(d2) - sd) < 0.15 * L]
             return min(near) if near else 0.0
         roots.append((ang, L, under))
+    Lmax = max((r[1] for r in roots), default=0)
+    roots = [r for r in roots if r[1] >= 0.5 * Lmax]
     return top, trunk_r, roots
 
 
@@ -172,6 +180,14 @@ def rig_prop(prop, segments=7):
     names = [b.name for b in arm.bones]
     for v in prop.data.vertices:
         if not any(g.weight > 0 for g in v.groups):
+            best = min(arm.bones, key=lambda b: _seg_dist(v.co, b.head_local, b.tail_local))
+            (prop.vertex_groups.get(best.name) or prop.vertex_groups.new(name=best.name)).add([v.index], 1.0, "REPLACE")
+    if trunk_r < 0.1 * top:
+        # thin props (twigs): heat weights bleed between neighbouring chains; give each root-band
+        # vertex to its nearest bone outright
+        for g in list(prop.vertex_groups):
+            prop.vertex_groups.remove(g)
+        for v in prop.data.vertices:
             best = min(arm.bones, key=lambda b: _seg_dist(v.co, b.head_local, b.tail_local))
             (prop.vertex_groups.get(best.name) or prop.vertex_groups.new(name=best.name)).add([v.index], 1.0, "REPLACE")
     # everything above the roots (trunk, branches, leaf cards: loose pieces heat weighting can't

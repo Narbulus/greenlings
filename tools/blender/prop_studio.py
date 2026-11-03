@@ -6,7 +6,7 @@ tools/props/placements.json (positions in the vanilla bind pose, so they fit eve
     import prop_studio; prop_studio.register(r"<repo>")
 
 Use: pick the body and the prop, Shift+right-click on the body to put the 3D cursor where the prop
-should stand, press "Anchor here", then tweak the sliders (the preview updates live). Name it and
+should stand, the prop (or the decoration piece being edited) follows the cursor; then tweak the sliders (the preview updates live). Name it and
 press Save. Load / Delete work on the saved list.
 """
 import json
@@ -391,16 +391,38 @@ CLASSES = (Settings, PS_OT_anchor, PS_OT_save, PS_OT_load, PS_OT_delete, PS_OT_e
            PS_OT_clear_decor, PS_PT_panel, PS_PT_decorate)
 
 
+_last_cursor = None
+
+
+def _follow_cursor():
+    """Moving the 3D cursor (Shift+right-click) moves the prop being placed or edited: no button."""
+    global _last_cursor
+    sc = bpy.context.scene
+    s = getattr(sc, "prop_studio", None)
+    if s is None:
+        return 0.2
+    cur = tuple(round(x, 5) for x in sc.cursor.location)
+    if _last_cursor is not None and cur != _last_cursor and (s.prop or s.editing):
+        s.has_anchor = True
+        s.anchor = sc.cursor.location
+    _last_cursor = cur
+    return 0.2
+
+
 def register(repo):
-    global _repo
+    global _repo, _last_cursor
     _repo = repo
     unregister()
     for c in CLASSES:
         bpy.utils.register_class(c)
     bpy.types.Scene.prop_studio = bpy.props.PointerProperty(type=Settings)
+    _last_cursor = None
+    bpy.app.timers.register(_follow_cursor, first_interval=0.2, persistent=True)
 
 
 def unregister():
+    if bpy.app.timers.is_registered(_follow_cursor):
+        bpy.app.timers.unregister(_follow_cursor)
     for c in reversed(CLASSES):
         try:
             bpy.utils.unregister_class(c)

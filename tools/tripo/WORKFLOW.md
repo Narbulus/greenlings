@@ -63,6 +63,7 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   full mode + retopo face_limit=500. `greenling_props.wrap` stands a prop on the body and walks each
   root along the skin so it bends with the body's curve; the trunk stays rigid; one bone each.
 - Hand placement: `prop_studio.register(repo)` adds View3D > sidebar > Greenlings > Prop Studio.
+  The prop (or edited decoration piece) follows the 3D cursor; no Anchor click needed.
   Placements save to tools/props/placements.json in vanilla bind-pose coordinates (fit every variant).
 - Root wrapping is done with a rig (`greenling_props.rig_prop`): a trunk bone plus a 7-bone chain (shorter toward the tip)
   along each root's underside, automatic weights; `wrap` poses each chain onto the skin and bakes it.
@@ -75,7 +76,10 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   .work/model/vanilla_leaves; not committed). Valheim leaf cards are 64px sprays/clusters of many small
   leaves, point-filtered, alpha cut, on pointed (non-square) cards: `make_vanilla_leaves`. A generated
   "single big leaf" texture looked nothing like Valheim. In game, borrow the vanilla material at runtime.
-- Root rigs only take vertices in the flat base band (ROOT_BAND = 20% of height); the trunk radius is
+- Root rigs: at most 4 roots, 45+ degrees apart, each at least half the longest (stray spikes made
+  overlapping chains that crumpled the twig base); thin props (trunk radius < 10% of height) use
+  nearest-bone weights, since heat weights bleed between chains. Roots come only from the flat base
+  band (ROOT_BAND = 20% of height); the trunk radius is
   measured just above it. Measuring mid-height broke multi-stalk props (mushroom stalks, twig branches
   counted as roots and bent onto the skin).
 - Prop set (Blender scene "Props" collection): trunk_flat2, trunk_lean2, mush_a, twig_a, twig_leafy,
