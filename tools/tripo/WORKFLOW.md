@@ -97,6 +97,9 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   that IS the Valheim pixel look. Match it: body skins ship at 128px (bake big, then downscale the
   final skin; 1024px was ~8x too fine), leaf cards sample a texture window sized for 62 px/unit
   (`greenling_props.TEXEL_DENSITY`). Check new assets with the density measure before shipping.
+  Prop textures too: Tripo bakes 2048px for a 0.2-unit prop (2000-5700 texels/unit). Pad the islands,
+  box-filter to the power of two nearest 62/unit (16-64px), Closest filtering, no normal map
+  (tools/tripo/prop_textures.py; small textures in .work/model/props_tex, originals in orig/).
 - Procedural decoration (`decorate.py`, Prop Studio > Decorate): zones on the shared body layout
   (back, shoulders stopping before the arms, crown, face), area-weighted surface samples with a
   minimum spacing, weighted prop choice, BVH overlap test between decorations (props may cut into the
