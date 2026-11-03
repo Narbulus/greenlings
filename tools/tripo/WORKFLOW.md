@@ -67,3 +67,14 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
 - Root wrapping is done with a rig (`greenling_props.rig_prop`): a trunk bone plus a 7-bone chain (shorter toward the tip)
   along each root's underside, automatic weights; `wrap` poses each chain onto the skin and bakes it.
   Per-vertex projection (tried first) crushed roots and tore the root/trunk junction.
+- Prop references: edit the vanilla stump's own views, then a "Valheim pass" with a vanilla render
+  attached as STYLE-ONLY reference, then "draw it as a game model of about 60 triangles" (this is
+  what finally killed the clean GPT look), plus "slightly wonky/lopsided, irregular facets". Branches
+  smooth and tapered, not zigzag. No leaves on generated models: leaves are cards added in Blender.
+- Leaves: use the GAME'S foliage textures (gldev_photo Bush01 / shrub_2 / Beech_small1 ->
+  .work/model/vanilla_leaves; not committed). Valheim leaf cards are 64px sprays/clusters of many small
+  leaves, point-filtered, alpha cut, on pointed (non-square) cards: `make_vanilla_leaves`. A generated
+  "single big leaf" texture looked nothing like Valheim. In game, borrow the vanilla material at runtime.
+- Prop set (Blender scene "Props" collection): trunk_flat2, trunk_lean2, mush_a, twig_a, twig_leafy,
+  leaf_{bush,spray,beech}_{1,tuft}. Everything above a prop's roots rides its trunk bone (loose leaf
+  cards would otherwise get root weights and fly off).

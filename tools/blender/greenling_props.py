@@ -166,6 +166,14 @@ def rig_prop(prop, segments=7):
         if not any(g.weight > 0 for g in v.groups):
             best = min(arm.bones, key=lambda b: _seg_dist(v.co, b.head_local, b.tail_local))
             (prop.vertex_groups.get(best.name) or prop.vertex_groups.new(name=best.name)).add([v.index], 1.0, "REPLACE")
+    # everything above the roots (trunk, branches, leaf cards: loose pieces heat weighting can't
+    # reach) rides the trunk bone only
+    tg = prop.vertex_groups.get("trunk") or prop.vertex_groups.new(name="trunk")
+    hi = [v.index for v in prop.data.vertices if v.co.z > 0.5 * top]
+    for g in prop.vertex_groups:
+        if g != tg:
+            g.remove(hi)
+    tg.add(hi, 1.0, "REPLACE")
     prop.parent = None
     for m in [m for m in prop.modifiers if m.type == "ARMATURE"]:
         prop.modifiers.remove(m)
@@ -304,4 +312,64 @@ def make_leaves(name, atlas, cells, kind="beech", count=1, length=0.16, spread=7
     o = bpy.data.objects.new(name, me)
     bpy.context.scene.collection.objects.link(o)
     me.materials.append(_leaf_material(atlas))
+    return o
+
+
+
+# ---------------------------------------------------------------- Valheim leaf cards
+# Valheim's foliage cards are tiny (64px) textures showing a whole spray/cluster of small leaves,
+# point-filtered, alpha cut out. These use the game's own textures (exported with gldev_photo into
+# .work/model/vanilla_leaves; not shipped: in game the vanilla materials are borrowed at runtime).
+VANILLA_LEAVES = {
+    # name: (texture file, UV box (u0, v0, u1, v1) of the leafy part, game prefab/material it comes from)
+    "bush": ("texture_Bush01.png", (0.0, 0.0, 1.0, 1.0), "Bush01"),
+    "spray": ("texture_shrub.png", (0.45, 0.0, 1.0, 0.62), "shrub_2"),
+    "beech": ("texture_beech_leaf_small.png", (0.0, 0.0, 1.0, 1.0), "Beech_small1"),
+}
+
+
+def _vanilla_leaf_material(path, kind):
+    name = "VLeaf_" + kind
+    m = bpy.data.materials.get(name)
+    if m:
+        return m
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(path, check_existing=True)
+    tex.interpolation = "Closest"
+    bsdf = nt.nodes["Principled BSDF"]
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+    bsdf.inputs["Roughness"].default_value = 0.9
+    nt.nodes.active = tex
+    m.use_backface_culling = False
+    return m
+
+
+def make_vanilla_leaves(name, tex_dir, kind="spray", count=1, size=0.22, spread=80.0, droop=20.0):
+    """Leaf prop from a vanilla foliage texture: `count` cards fanned from a base point at the origin.
+    Each card is a pointed shape (wide at the top, pointed at the base) so it tucks into the body."""
+    import bmesh
+    import os
+    tex, (u0, v0, u1, v1), _ = VANILLA_LEAVES[kind]
+    aspect = (u1 - u0) / (v1 - v0)
+    shape = [(0.0, 0.0), (0.45, 0.35), (0.5, 0.85), (0.15, 1.0), (-0.15, 1.0), (-0.5, 0.85), (-0.45, 0.35)]
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new("UVMap")
+    for i in range(count):
+        a = 0.0 if count == 1 else -spread / 2 + spread * i / (count - 1)
+        rot = Matrix.Rotation(math.radians(a), 3, "Y") @ Matrix.Rotation(math.radians(-droop), 3, "X")
+        w, h = size * aspect, size
+        vs = [bm.verts.new(rot @ Vector((x * w, i * 0.003, y * h))) for x, y in shape]
+        f = bm.faces.new(vs)
+        for l, (x, y) in zip(f.loops, shape):
+            l[uvl].uv = (u0 + (x + 0.5) * (u1 - u0), v0 + y * (v1 - v0))
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(o)
+    me.materials.append(_vanilla_leaf_material(os.path.join(tex_dir, tex), kind))
     return o
