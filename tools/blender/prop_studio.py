@@ -381,9 +381,11 @@ class PS_OT_paint(bpy.types.Operator):
         import decorate
         from bpy_extras import view3d_utils
         s = context.scene.prop_studio
-        xy = (event.mouse_region_x, event.mouse_region_y)
-        o3 = view3d_utils.region_2d_to_origin_3d(context.region, context.region_data, xy)
-        d3 = view3d_utils.region_2d_to_vector_3d(context.region, context.region_data, xy)
+        # the viewport's main region, not the sidebar the Paint button was pressed in
+        r, rv = self.region, self.area.spaces.active.region_3d
+        xy = (event.mouse_x - r.x, event.mouse_y - r.y)
+        o3 = view3d_utils.region_2d_to_origin_3d(r, rv, xy)
+        d3 = view3d_utils.region_2d_to_vector_3d(r, rv, xy)
         M = s.body.matrix_world
         Mi = M.inverted()
         ok, p, n, _ = s.body.ray_cast(Mi @ o3, (Mi.to_3x3() @ d3).normalized())
@@ -427,7 +429,7 @@ class PS_OT_paint(bpy.types.Operator):
             bpy.data.objects.remove(o, do_unlink=True)
 
     def _status(self, context):
-        context.area.header_text_set(
+        self.area.header_text_set(
             f"Paint props: click/drag place, Ctrl+click erase, Ctrl+Z undo, Esc/right-click done  ({len(self.placed)} placed)")
 
     def invoke(self, context, event):
@@ -438,6 +440,8 @@ class PS_OT_paint(bpy.types.Operator):
             return {"CANCELLED"}
         if not s.palette:
             fill_palette(s)
+        self.area = context.area
+        self.region = next(r for r in context.area.regions if r.type == "WINDOW")
         self.rnd = random.Random()
         self.placed, self.last, self.down = [], None, False
         context.window_manager.modal_handler_add(self)
@@ -445,8 +449,8 @@ class PS_OT_paint(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def modal(self, context, event):
-        if event.type in {"ESC", "RIGHTMOUSE"} and event.value == "PRESS":
-            context.area.header_text_set(None)
+        if event.type in {"ESC", "RIGHTMOUSE"} and event.value == "PRESS" or not self.area.regions:
+            self.area.header_text_set(None)
             return {"FINISHED"}
         if event.type == "Z" and event.ctrl and event.value == "PRESS":
             while self.placed:
@@ -456,7 +460,12 @@ class PS_OT_paint(bpy.types.Operator):
                     break
             self._status(context)
             return {"RUNNING_MODAL"}
-        inside = 0 <= event.mouse_region_x < context.region.width and 0 <= event.mouse_region_y < context.region.height
+        r = self.region
+        inside = r.x <= event.mouse_x < r.x + r.width and r.y <= event.mouse_y < r.y + r.height
+        # the sidebar overlaps the main region's right edge: clicks there go to its buttons
+        ui = next((u for u in self.area.regions if u.type == "UI" and u.width > 1), None)
+        if ui and ui.x <= event.mouse_x < ui.x + ui.width and ui.y <= event.mouse_y < ui.y + ui.height:
+            inside = False
         if event.type == "LEFTMOUSE" and (inside or event.value == "RELEASE"):
             if event.value == "PRESS":
                 self.down, self.last = True, None
