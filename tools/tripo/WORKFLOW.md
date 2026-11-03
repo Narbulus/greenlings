@@ -64,6 +64,6 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   root along the skin so it bends with the body's curve; the trunk stays rigid; one bone each.
 - Hand placement: `prop_studio.register(repo)` adds View3D > sidebar > Greenlings > Prop Studio.
   Placements save to tools/props/placements.json in vanilla bind-pose coordinates (fit every variant).
-- Root wrapping is done with a rig (`greenling_props.rig_prop`): a trunk bone plus a 4-bone chain
+- Root wrapping is done with a rig (`greenling_props.rig_prop`): a trunk bone plus a 7-bone chain (shorter toward the tip)
   along each root's underside, automatic weights; `wrap` poses each chain onto the skin and bakes it.
   Per-vertex projection (tried first) crushed roots and tore the root/trunk junction.

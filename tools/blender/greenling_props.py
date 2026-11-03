@@ -123,9 +123,10 @@ def _root_layout(prop):
     return top, trunk_r, roots
 
 
-def rig_prop(prop, segments=4):
+def rig_prop(prop, segments=7):
     """Armature for a prop: a trunk bone and a chain of `segments` bones along each root's underside,
-    from inside the trunk wall to the tip; the prop gets automatic weights on it. Cached on the prop."""
+    from inside the trunk wall to the tip, shorter toward the tip (like finger joints) so tips can follow
+    tight curves; the prop gets automatic weights on it. Cached on the prop (delete <prop>_rig to redo)."""
     name = prop.name + "_rig"
     if name in bpy.data.objects:
         return bpy.data.objects[name]
@@ -143,7 +144,9 @@ def rig_prop(prop, segments=4):
         s0 = 0.6 * trunk_r
         prev = None
         for j in range(segments):
-            a_, b_ = s0 + (L - s0) * j / segments, s0 + (L - s0) * (j + 1) / segments
+            # finger-like: long bones near the trunk, progressively shorter toward the tip
+            f = lambda x: 1 - (1 - x) ** 2
+            a_, b_ = s0 + (L - s0) * f(j / segments), s0 + (L - s0) * f((j + 1) / segments)
             eb = arm.edit_bones.new(f"root{k}_{j}")
             eb.head = d * a_ + Vector((0, 0, under(a_)))
             eb.tail = d * b_ + Vector((0, 0, under(b_)))
