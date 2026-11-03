@@ -176,8 +176,9 @@ def outward(p, nr):
 
 
 def overlaps(o, others):
+    """Name of the first of `others` that o cuts into, or None."""
     t = _bvh(o)
-    return any(t.overlap(_bvh(u)) for u in others if u != o)
+    return next((u.name for u in others if u != o and t.overlap(_bvh(u))), None)
 
 
 def run(body, opts=None):

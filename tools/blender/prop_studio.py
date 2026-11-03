@@ -407,17 +407,28 @@ class PS_OT_paint(bpy.types.Operator):
         if not pal:
             self.report({"WARNING"}, "no props ticked in the list")
             return
-        prop = bpy.data.objects[self.rnd.choices([a for a, _ in pal], [w for _, w in pal])[0]]
-        k = 0
-        while f"P{k:02d}_{prop.name}" in bpy.data.objects:
-            k += 1
         coll = decorate.decor_collection()
-        o = decorate.place(prop, s.body, p, n, self.rnd, _brush_opts(s), f"P{k:02d}_{prop.name}")
-        if s.p_overlap and decorate.overlaps(o, list(coll.objects)):
+        near = [u for u in coll.objects if (u.matrix_world.translation - p).length < 0.6]
+        # crowded spots: try other props / rotations, shrinking, before giving up
+        tries = 8 if s.p_overlap else 1
+        for t in range(tries):
+            prop = bpy.data.objects[self.rnd.choices([a for a, _ in pal], [w for _, w in pal])[0]]
+            k = 0
+            while f"P{k:02d}_{prop.name}" in bpy.data.objects:
+                k += 1
+            f = 1.0 - 0.5 * t / max(tries - 1, 1)
+            opts = _brush_opts(s)
+            opts["leaf_size"] = tuple(x * f for x in opts["leaf_size"])
+            opts["prop_scale"] = tuple(x * f for x in opts["prop_scale"])
+            o = decorate.place(prop, s.body, p, n, self.rnd, opts, f"P{k:02d}_{prop.name}")
+            hit = decorate.overlaps(o, near) if s.p_overlap else None
+            if not hit:
+                self.placed.append(o.name)
+                self.last = p
+                self.msg = ""
+                return
             bpy.data.objects.remove(o, do_unlink=True)
-            return
-        self.placed.append(o.name)
-        self.last = p
+        self.msg = f"  | no room: blocked by {hit} (Ctrl+click it, or untick Avoid overlaps)"
 
     def _erase(self, context, event):
         hit = self._hit(context, event)
@@ -430,7 +441,8 @@ class PS_OT_paint(bpy.types.Operator):
 
     def _status(self, context):
         self.area.header_text_set(
-            f"Paint props: click/drag place, Ctrl+click erase, Ctrl+Z undo, Esc/right-click done  ({len(self.placed)} placed)")
+            f"Paint props: click/drag place, Ctrl+click erase, Ctrl+Z undo, Esc/right-click done  ({len(self.placed)} placed)"
+            + self.msg)
 
     def invoke(self, context, event):
         import random
@@ -443,7 +455,7 @@ class PS_OT_paint(bpy.types.Operator):
         self.area = context.area
         self.region = next(r for r in context.area.regions if r.type == "WINDOW")
         self.rnd = random.Random()
-        self.placed, self.last, self.down = [], None, False
+        self.placed, self.last, self.down, self.msg = [], None, False, ""
         context.window_manager.modal_handler_add(self)
         self._status(context)
         return {"RUNNING_MODAL"}
