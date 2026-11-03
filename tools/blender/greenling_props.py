@@ -80,32 +80,48 @@ def wrap(prop, body, anchor, hint=(0, 0, 1), spin=0.0, offset=0.008, bone="spine
         c.objects.link(o)
     o.matrix_world = Matrix.Identity(4)
     # roots: low on the prop and further out than the trunk. Each root vertex is laid along the skin:
-    # walk outward from the trunk base over the body surface (repeated nearest-point steps), so a root
-    # bends with the body's curve instead of being pulled straight in (which shortened and crumpled it).
-    top = max(v.co.z for v in prop.data.vertices)
-    mid = [Vector((v.co.x, v.co.y)).length for v in prop.data.vertices if 0.45 * top < v.co.z < 0.8 * top]
+    # walk from the anchor's SURFACE point (never from the sunk base, which may be inside the body)
+    # along the surface toward the root's direction, then sit at the skin + offset + the vertex's height
+    # above the root's own underside (so the underside touches the skin and the thickness is kept).
+    # Sink only moves the rigid trunk.
+    src = prop.data.vertices
+    top = max(v.co.z for v in src)
+    mid = [Vector((v.co.x, v.co.y)).length for v in src if 0.45 * top < v.co.z < 0.8 * top]
     trunk_r = sorted(mid)[len(mid) // 2] if mid else 0.1 * top
-    centre = Mi @ base
+    bins = {}
+
+    def key(c):
+        return (round(math.atan2(c.y, c.x) / (math.pi / 16)), round(Vector((c.x, c.y)).length / (0.25 * trunk_r)))
+    for v in src:
+        k = key(v.co)
+        bins[k] = min(bins.get(k, 9.0), v.co.z)
+
+    def surface(q, nrm):
+        """Project q onto the skin from outside along -nrm (falls back to nearest)."""
+        hit, hn, _, _ = bvh.ray_cast(q + nrm * 0.15, -nrm, 0.4)
+        if hit is None:
+            hit, hn, _, _ = bvh.find_nearest(q)
+        if hn.dot(nrm) < 0:
+            hn = -hn
+        return hit, hn
+
+    start = loc.copy()
+    n0 = Mi.to_3x3() @ n
     for v in o.data.vertices:
         p = T @ v.co
-        r = Vector((v.co.x, v.co.y)).length * scale
-        if not roots or v.co.z > 0.5 * top or r <= trunk_r * scale:
+        r = Vector((v.co.x, v.co.y)).length
+        if not roots or v.co.z > 0.5 * top or r <= trunk_r:
             v.co = p
             continue
-        t = min(1.0, (r - trunk_r * scale) / (trunk_r * scale))
-        # direction of this root in the prop's own plane, turned onto the body
-        d = (rot.to_3x3() @ Vector((v.co.x, v.co.y, 0))).normalized()
-        q = centre.copy()
-        step = r / 6
-        for _ in range(6):
-            q = q + (Mi.to_3x3() @ d) * step
-            hit, hn, _, _ = bvh.find_nearest(q)
-            if hit is None:
-                break
-            q = hit
-        s_pt = M @ q + (M.to_3x3() @ bvh.find_nearest(q)[1]).normalized() * offset
-        h = v.co.z * scale   # keep the root's own thickness above the skin
-        s_pt = s_pt + (M.to_3x3() @ bvh.find_nearest(q)[1]).normalized() * h
+        t = min(1.0, (r - trunk_r) / (0.35 * trunk_r))
+        under = bins.get(key(v.co), 0.0)
+        d = Mi.to_3x3() @ (rot.to_3x3() @ Vector((v.co.x, v.co.y, 0))).normalized()
+        q, qn = start.copy(), n0.normalized()
+        steps = 8
+        for _ in range(steps):
+            tan = (d - qn * d.dot(qn)).normalized()
+            q, qn = surface(q + tan * (r * scale / steps), qn)
+        s_pt = M @ (q + qn.normalized() * (offset + max(0.0, v.co.z - under) * scale))
         v.co = p.lerp(s_pt, t * t * (3 - 2 * t))
     o.data.update()
     o.vertex_groups.clear()
