@@ -718,8 +718,11 @@ def import_auto(glb, name, coll_name):
     # scale by shoulder height (arms at vanilla 1.21): a trunk or anything on the head must not shrink the body
     arm = [p for p in ps if abs(p.x - cx) > 0.55 * max(left, right)]
     scale = 1.21 / ((sum(p.z for p in arm) / len(arm)) - zmin) if arm else HEIGHT / h
+    # depth: line the T-pose arms up with the vanilla arm bones (the feet sit ~10cm in front of them in
+    # vanilla, so centring on the feet put every body too far back and the fit then shoved the shoulders forward)
+    arm_y = sum(p.y for p in arm) / len(arm) if arm else cy
     for v in o.data.vertices:
-        v.co = Vector(((v.co.x - cx) * scale, (v.co.y - cy) * scale, gt.GROUND_Z + (v.co.z - zmin) * scale))
+        v.co = Vector(((v.co.x - cx) * scale, (v.co.y - arm_y) * scale + VANILLA_ARM[0], gt.GROUND_Z + (v.co.z - zmin) * scale))
     o.data.update()
     return o, held
 
