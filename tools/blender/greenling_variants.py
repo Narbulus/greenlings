@@ -1095,3 +1095,118 @@ def rig_auto(glb, name, out_json, template_json, keep_stump=False):
                     head_fn=lambda g: head_to_head(g, eyes, arm_z))
     info["eyes"] = eyes
     return info
+
+
+
+def cut_crown(o, z, radius=0.22, y_range=(-0.3, 0.16), dome=0.25):
+    """
+    Remove what sits on top of the head (a generated trunk) above world height z, inside a column
+    around the head (|x| < radius, y in y_range, so the back and shoulders are untouched), and close
+    the opening with a slightly domed cap: the crown is then smooth and a trunk prop can sit on it.
+    Cap vertices take averaged weights and UVs from the rim (fill_holes).
+    """
+    import bmesh
+    M = o.matrix_world
+    Mi = M.inverted()
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    inside = lambda p: abs(p.x) < radius and y_range[0] < p.y < y_range[1]
+    sel = [f for f in bm.faces if any((M @ v.co).z > z for v in f.verts) and inside(M @ f.calc_center_median())]
+    geom = list({e for f in sel for e in f.edges}) + sel + list({v for f in sel for v in f.verts})
+    bmesh.ops.bisect_plane(bm, geom=geom, plane_co=Mi @ Vector((0, 0, z)), plane_no=(Mi.to_3x3() @ Vector((0, 0, 1))).normalized(),
+                           clear_outer=True)
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(o.data)
+    bm.free()
+    img = next((n.image for n in o.data.materials[0].node_tree.nodes if n.type == "TEX_IMAGE" and n.image and "Normal" not in n.image.name), None)
+    made = fill_holes(o, max_sides=200, image=img)
+    if dome:
+        # raise the cap centre a little so the crown is rounded, not a flat lid
+        import bmesh as bm_
+        b = bm_.new()
+        b.from_mesh(o.data)
+        top = [v for v in b.verts if abs((M @ v.co).z - z) < 1e-3 and inside(M @ v.co)]
+        if top:
+            c = sum((M @ v.co for v in top), Vector()) / len(top)
+            r = max(((M @ v.co) - c).length for v in top) or 1
+            for v in b.verts:
+                p = M @ v.co
+                if abs(p.z - z) < 1e-3 and inside(p):
+                    continue
+                if inside(p) and p.z >= z - 1e-4 and (p - c).length < r:
+                    v.co = Mi @ (p + Vector((0, 0, dome * r * (1 - ((p - c).length / r) ** 2))))
+        b.to_mesh(o.data)
+        b.free()
+    o.data.update()
+    return made
+
+
+
+# ---------------------------------------------------------------- hand tuning
+
+TEST_POSES = [   # (frame, {bone: (x, y, z) degrees}) keyed on the rig by setup_paint(), loops over 1..70
+    (1, {}),
+    (10, {"head": (20, 0, 30)}),
+    (20, {"head": (-15, 0, -30)}),
+    (30, {"head": (30, 0, 0), "spine3": (10, 0, 0)}),
+    (40, {"l_arm1": (0, 0, -60), "r_arm1": (0, 0, 60), "l_arm2": (0, 0, -15), "r_arm2": (0, 0, 15)}),
+    (50, {"l_arm1": (-70, 0, -20), "r_arm1": (-70, 0, 20)}),
+    (60, {"l_leg1": (35, 0, 0), "l_leg2": (-45, 0, 0), "r_leg1": (-25, 0, 0), "l_arm1": (-20, 0, -60), "r_arm1": (25, 0, 60)}),
+    (70, {}),
+]
+
+
+def setup_paint(name):
+    """
+    Get a body ready for hand weight painting: only it and the rig visible, a looping test-pose
+    animation on the rig (frames 1-70: head turns, arms down/forward, a step) to scrub while painting,
+    and the body in Weight Paint mode with the rig selected (Ctrl+click a bone to pick its group).
+    Export afterwards with export_hand(name).
+    """
+    import math
+    rig = bpy.data.objects[RIG]
+    body = bpy.data.objects[f"GL_{name}_Cube"]
+    coll = bpy.data.collections[f"GL_{name}"]
+    if bpy.context.object and bpy.context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    for o in bpy.context.view_layer.objects:
+        o.hide_set(not (o is rig or o.name in coll.objects))
+    act = bpy.data.actions.get("TestPoses") or bpy.data.actions.new("TestPoses")
+    rig.animation_data_create()
+    rig.animation_data.action = act
+    for fc in list(act.fcurves) if hasattr(act, "fcurves") else []:
+        act.fcurves.remove(fc)
+    bones = {b for _, p in TEST_POSES for b in p}
+    for frame, pose in TEST_POSES:
+        for b in bones:
+            pb = rig.pose.bones[b]
+            pb.rotation_mode = "XYZ"
+            pb.rotation_euler = tuple(math.radians(a) for a in pose.get(b, (0, 0, 0)))
+            pb.keyframe_insert("rotation_euler", frame=frame)
+    sc = bpy.context.scene
+    sc.frame_start, sc.frame_end = 1, 70
+    sc.frame_set(1)
+    bpy.ops.object.select_all(action="DESELECT")
+    rig.select_set(True)
+    body.select_set(True)
+    bpy.context.view_layer.objects.active = body
+    bpy.ops.object.mode_set(mode="WEIGHT_PAINT")
+    return {"body": body.name, "rig": rig.name, "groups": len(body.vertex_groups)}
+
+
+def export_hand(name, template_json, out_json, models_dir=None, file_name=None):
+    """Export a hand-tuned body as it stands (no rebuild) and optionally copy it into the game's models folder."""
+    import os
+    import shutil
+    rig = bpy.data.objects[RIG]
+    if bpy.context.object and bpy.context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    if rig.animation_data:
+        rig.animation_data.action = None
+    for pb in rig.pose.bones:
+        pb.matrix_basis.identity()
+    counts = gio.export_creature(f"GL_{name}", template_json, out_json)
+    glmesh = out_json[:-5] + ".glmesh"
+    if models_dir:
+        shutil.copy(glmesh, os.path.join(models_dir, (file_name or os.path.basename(glmesh))))
+    return counts

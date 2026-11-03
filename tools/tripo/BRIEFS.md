@@ -40,3 +40,6 @@ fix the brief and regenerate rather than editing the mesh.
 - No branches/twigs on the body: those become props attached later.
 - Generate full mode, then Tripo retopology (`tripo.py retopo`, v3.0, ~1500 faces), then
   `greenling_variants.rig_body`.
+- No trunk, stump or anything else on top of the head in body references: a rigid shape inside the
+  skinned body bends at the neck blend and looks squishy when the head turns. Trunks are props
+  (rigid, on the head bone), generated separately like the other attachments.
