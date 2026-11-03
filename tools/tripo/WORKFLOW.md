@@ -57,3 +57,10 @@ Briefing rules are in BRIEFS.md; this file is the whole process and its lessons.
   shaman has its own body. Vanilla `Cube.001` is the stump on the head (weighted to the spine);
   the brute's club and flower are separate rigid meshes: props are the vanilla way.
 - Don't drive the dev game while the user is playing in it (check before cam/screenshot batches).
+
+## 5. Props (`greenling_props.py`, `prop_studio.py`)
+- Trunk props: generate from the vanilla stump's own views with roots spread FLAT (3-4 roots max),
+  full mode + retopo face_limit=500. `greenling_props.wrap` stands a prop on the body and walks each
+  root along the skin so it bends with the body's curve; the trunk stays rigid; one bone each.
+- Hand placement: `prop_studio.register(repo)` adds View3D > sidebar > Greenlings > Prop Studio.
+  Placements save to tools/props/placements.json in vanilla bind-pose coordinates (fit every variant).
