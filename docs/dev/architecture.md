@@ -78,7 +78,7 @@ Jobs **generalize** by radius: endpoints remember a prefab and a position, and m
 | `Doors.cs` | Opening and closing doors through the door's RPC |
 | `Interaction.cs` | Pat, use item (coin, food, hammer), hover text |
 | `Traits.cs`, `Names.cs`, `Mimicry.cs` | Personality |
-| `CarryVisual.cs`, `Crown.cs`, `Effects.cs`, `Models.cs`, `GreenlingModel.cs` | Visuals: carried item, head sprout, sparkles, remodel |
+| `CarryVisual.cs`, `Effects.cs`, `Models.cs`, `GreenlingModel.cs` | Visuals: carried items/tools, sparkles, remodel and authored decorations |
 | `Breakables.cs` | What can be smashed, and by whom |
 | `Fields.cs` | Planting: the field grid (spacing, rows, extent), next spot, placing a crop, the player-planting hook |
 | `Shamans.cs` | Healing (patients, cooldown, the prayer effect), strays to soothe, shaman company |

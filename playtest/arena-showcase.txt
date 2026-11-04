@@ -1,0 +1,33 @@
+# Populate an existing arena; keeps its current actors and inventory.
+# Names are exact model names. Reset the arena before running this a second time.
+# Run with dev.ps1 test playtest/arena-showcase.txt, or gldev_run arena-showcase after deployment.
+tod 0.5
+env Clear
+gl_model pool
+gldev_actor Beak Greydwarf social -30 -12 beak
+gldev_actor GDv10 Greydwarf social -22 -12 gdv10
+gldev_actor Round Greydwarf social -14 -12 round
+gldev_actor Stump Greydwarf social -6 -12 stump
+gldev_actor Young Greydwarf social 2 -12 young
+gldev_actor Brute-One Greydwarf_Elite social -26 -3 brute1
+gldev_actor Brute-Two Greydwarf_Elite social -14 -3 brute2
+gldev_actor Brute-Three Greydwarf_Elite social -2 -3 brute3
+gldev_actor Greyling Greyling social -20 -17 greenling
+gldev_actor Shaman Greydwarf_Shaman social -8 -17
+gldev_fill @haul/source Wood 24
+gldev_fill @haul/source Hammer 2
+gldev_fill @machines/source Wood 20
+gldev_fill @machines/source Coal 20
+gldev_fill @machines/source CopperOre 10
+gldev_fill @doors/source Wood 12
+gldev_fill @social/source Raspberry 20
+gldev_fill @social/source Cultivator 1
+!wait 2
+!assert @Beak bond == 100
+!assert @Round hp > 0
+!assert @Brute-One hp > 0
+!assert @Shaman bond == 100
+gldev_arena goto
+gldev_arena snapshot
+save
+!wait 3

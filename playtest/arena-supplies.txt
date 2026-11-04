@@ -1,0 +1,29 @@
+# Stock an empty social-area reinforced chest. These are additions, not a refill-to-target command.
+gldev_fill @social/sink Coins 500
+gldev_fill @social/sink Amber 50
+gldev_fill @social/sink AmberPearl 20
+gldev_fill @social/sink Thistle 100
+gldev_fill @social/sink Raspberry 100
+gldev_fill @social/sink Blueberries 100
+gldev_fill @social/sink Mushroom 100
+gldev_fill @social/sink Honey 50
+gldev_fill @social/sink Carrot 50
+gldev_fill @social/sink CookedMeat 50
+gldev_fill @social/sink Wood 50
+gldev_fill @social/sink Resin 30
+gldev_fill @social/sink Hammer 1
+!assert @social/sink count:Coins == 500
+!assert @social/sink count:Amber == 50
+!assert @social/sink count:AmberPearl == 20
+!assert @social/sink count:Thistle == 100
+!assert @social/sink count:Raspberry == 100
+!assert @social/sink count:Blueberries == 100
+!assert @social/sink count:Mushroom == 100
+!assert @social/sink count:Honey == 50
+!assert @social/sink count:Carrot == 50
+!assert @social/sink count:CookedMeat == 50
+!assert @social/sink count:Wood == 50
+!assert @social/sink count:Resin == 30
+!assert @social/sink count:Hammer == 1
+save
+!wait 3

@@ -51,6 +51,7 @@ nav:
       - dev/index.md
       - Architecture: dev/architecture.md
       - Dev loop and harness: dev/harness.md
+      - Fixed test grounds: dev/test-grounds.md
       - Scenario tests: dev/tests.md
       - Playtesting: dev/playtest.md
       - Writing the wiki: dev/wiki.md

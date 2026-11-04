@@ -16,7 +16,7 @@ camp and gets up to mischief, but it won't learn anything yet. Earn its trust:
 
 After a treat or a pat a stray tags along behind you for a little while, which makes it easy to lead home.
 
-As trust grows it turns greener and a little plant sprouts from the hollow of its head. At full trust it
+As trust grows it turns greener. Head decorations are authored with the character model. At full trust it
 becomes a **Greenling**. Every greenling has a trait or two (greedy, lazy, clumsy, curious, cuddly, magpie,
 zoomy, copycat, sleepy); hover over it to see them.
 

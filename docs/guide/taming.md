@@ -34,6 +34,6 @@ Queen's jam.
 
 After a treat or a pat, a stray **tags along** behind you for about 20 seconds, which makes it easy to lead home.
 
-As trust grows it turns greener and a little plant sprouts from the hollow on its head. The plants are
-forest things: a mushroom, dandelion, thistle, shrub or tiny sapling. At 100% it becomes a
+As trust grows it turns greener. Head decorations are part of the authored character assets.
+At 100% it becomes a
 **Greenling**, gets a personality ([traits](traits.md)), and can be [taught](teaching.md).

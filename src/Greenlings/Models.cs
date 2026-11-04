@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Greenlings
 {
-    /// <summary>Look-only copies of game objects (carried items, head sprouts).</summary>
+    /// <summary>Look-only copies of game objects (carried items and tools).</summary>
     internal static class Models
     {
         private static Transform _inactiveRoot;

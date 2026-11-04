@@ -7,6 +7,7 @@
 
   <!-- In-game scripts (gldev_run <name>) live in the repo's playtest/ folder. -->
   <ItemGroup>
+    <ProjectReference Include="..\Greenlings\Greenlings.csproj" />
     <Playtest Include="..\..\playtest\*.txt" />
     <None Include="@(Playtest)" Link="scripts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <PluginExtraFile Include="@(Playtest->'scripts\%(Filename)%(Extension)')" />

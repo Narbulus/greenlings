@@ -1,5 +1,8 @@
 # Dev loop and harness
 
+For fixed layouts, exact fixture selectors, state assertions and movement traces, see
+[Fixed test grounds and text evidence](test-grounds.md).
+
 ## Commands
 
 ```powershell
@@ -33,7 +36,9 @@ Tests and bug reports rely on logs, not screenshots.
 |---|---|
 | `!waitfor <regex> [timeout]` | Ordered expectation: matches a log line after the previous match. A failure skips the rest and fails the run. |
 | `!wait <sec>` | Plain delay |
-| `!screenshot <name>` | Saved to `<profile>/BepInEx/devtools/` |
+| `!assert @fixture field operator value` | Check actual state or inventory; fail the batch on mismatch |
+| `!eventually <seconds> @fixture field operator value` | Poll a state assertion until it passes or times out |
+| `!screenshot <name>` | Opt-in via `Evidence.Screenshots`; otherwise captures `gl_dump` |
 | `!include <file>` | Inlines another file (expanded by `dev.ps1`) |
 | `!pos`, `!quit` | Log the player position / quit the game |
 

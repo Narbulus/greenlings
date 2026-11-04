@@ -20,6 +20,7 @@ namespace Greenlings.DevTools
     /// Emits "[GLDEV] ..." log markers that scripts/dev.ps1 waits on.
     /// </summary>
     [BepInPlugin(Id, "Greenlings DevTools", "0.1.0")]
+    [BepInDependency("greenlings")]
     public class DevToolsPlugin : BaseUnityPlugin
     {
         public const string Id = "greenlings.devtools";
@@ -31,6 +32,8 @@ namespace Greenlings.DevTools
         internal static ConfigEntry<string> CharacterName;
         internal static ConfigEntry<string> WorldName;
         internal static ConfigEntry<string> WorldSeed;
+        internal static ConfigEntry<bool> Screenshots;
+        private bool _running;
 
         private string _dir;
         private string _cmdFile;
@@ -44,6 +47,7 @@ namespace Greenlings.DevTools
             CharacterName = Config.Bind("AutoStart", "Character", "GLDev", "Dev character (created if missing).");
             WorldName = Config.Bind("AutoStart", "World", "GLDev", "Dev world (created locally if missing).");
             WorldSeed = Config.Bind("AutoStart", "Seed", "GLDevSeed", "Seed used when the dev world is created.");
+            Screenshots = Config.Bind("Evidence", "Screenshots", false, "Opt in to !screenshot capture. Text evidence is the default.");
 
             _dir = Path.Combine(Paths.BepInExRootPath, "devtools");
             Directory.CreateDirectory(_dir);
@@ -76,6 +80,7 @@ namespace Greenlings.DevTools
 
         private void PollCommands()
         {
+            if (_running) return;
             if (!File.Exists(_cmdFile)) return;
             string[] lines;
             try
@@ -112,6 +117,24 @@ namespace Greenlings.DevTools
 
         private IEnumerator RunLines(string[] lines)
         {
+            while (_running) yield return null;
+            _running = true;
+            var run = RunLinesCore(lines);
+            try
+            {
+                while (true)
+                {
+                    object current;
+                    try { if (!run.MoveNext()) break; current = run.Current; }
+                    catch (Exception e) { Log.LogError("[GLDEV] FAIL runner: " + e); Marker("CMD DONE (FAILED)"); break; }
+                    yield return current;
+                }
+            }
+            finally { _running = false; (run as IDisposable)?.Dispose(); }
+        }
+
+        private IEnumerator RunLinesCore(string[] lines)
+        {
             var failed = false;
             var checkpoint = Recent.Seq; // each !waitfor matches events after the previous match
             foreach (var raw in lines)
@@ -126,6 +149,39 @@ namespace Greenlings.DevTools
                     var arg = parts.Length > 1 ? parts[1].Trim() : "";
                     switch (parts[0].ToLowerInvariant())
                     {
+                        case "eventually":
+                        {
+                            var split = arg.IndexOf(' ');
+                            var timeout = float.Parse(arg.Substring(0, split), System.Globalization.CultureInfo.InvariantCulture);
+                            if (float.IsNaN(timeout) || timeout <= 0 || timeout > 300) throw new ArgumentException("eventually timeout must be 0..300 seconds");
+                            var expression = arg.Substring(split + 1);
+                            var deadline = Time.realtimeSinceStartup + timeout;
+                            string error = "";
+                            var passed = false;
+                            do
+                            {
+                                try { TestGrounds.Assert(expression, false); passed = true; }
+                                catch (Exception e) { error = e.Message; }
+                                if (!passed) yield return new WaitForSecondsRealtime(0.2f);
+                            } while (!passed && Time.realtimeSinceStartup < deadline);
+                            if (passed) Marker("PASS eventually " + expression);
+                            else
+                            {
+                                failed = true;
+                                Log.LogError("[GLDEV] FAIL eventually " + error);
+                                try { TestGrounds.Snapshot(); } catch (Exception diagnostic) { Log.LogWarning(diagnostic.Message); }
+                            }
+                            break;
+                        }
+                        case "assert":
+                            try { TestGrounds.Assert(arg); }
+                            catch (Exception e)
+                            {
+                                Log.LogError("[GLDEV] FAIL assert " + e.Message);
+                                failed = true;
+                                try { TestGrounds.Snapshot(); } catch (Exception diagnostic) { Log.LogWarning(diagnostic.Message); }
+                            }
+                            break;
                         case "wait":
                             yield return new WaitForSeconds(float.TryParse(arg, out var s) ? s : 1f);
                             break;
@@ -147,10 +203,21 @@ namespace Greenlings.DevTools
                             }
                             if (hit != null) checkpoint = hit.Value.seq;
                             if (hit != null) Marker($"PASS waitfor /{pattern}/ after {timeout - (deadline - Time.time):0.0}s");
-                            else { Log.LogError($"[GLDEV] FAIL waitfor /{pattern}/ timed out after {timeout}s"); failed = true; }
+                            else
+                            {
+                                Log.LogError($"[GLDEV] FAIL waitfor /{pattern}/ timed out after {timeout}s"); failed = true;
+                                Console.instance?.TryRunCommand("gl_dump", true, true);
+                                try { TestGrounds.Snapshot(); } catch (Exception diagnostic) { Log.LogWarning(diagnostic.Message); }
+                            }
                             break;
                         }
                         case "screenshot":
+                            if (!Screenshots.Value)
+                            {
+                                Console.instance?.TryRunCommand("gl_dump", true, true);
+                                Log.LogInfo("[GLDEV] screenshot skipped; Evidence.Screenshots=false (gl_dump captured instead)");
+                                break;
+                            }
                             var name = arg.Length > 0 ? arg : DateTime.Now.ToString("HHmmss");
                             var path = Path.Combine(_dir, name + ".png");
                             yield return new WaitForEndOfFrame();
@@ -167,22 +234,34 @@ namespace Greenlings.DevTools
                             Application.Quit();
                             break;
                         default:
-                            Log.LogWarning("[GLDEV] unknown directive " + parts[0]);
+                            Log.LogError("[GLDEV] FAIL unknown directive " + parts[0]);
+                            failed = true;
                             break;
                     }
                 }
                 else if (Console.instance != null)
                 {
-                    try { Console.instance.TryRunCommand(line, silentFail: false, skipAllowedCheck: true); }
+                    try
+                    {
+                        var command = line.Split(' ')[0].ToLowerInvariant();
+                        if (!Terminal.commands.ContainsKey(command)) throw new ArgumentException("unknown console command " + command);
+                        Console.instance.TryRunCommand(line, silentFail: false, skipAllowedCheck: true);
+                    }
                     catch (Exception e)
                     {
                         Log.LogError($"[GLDEV] FAIL command '{line}' threw: {e.GetBaseException()}");
                         failed = true;
                     }
+                    if (line == "gldev_arena build" || line == "gldev_arena reset" || line == "gldev_arena optimize")
+                    {
+                        while (TestGrounds.Busy) yield return null;
+                        if (!TestGrounds.BuildSucceeded) failed = true;
+                    }
                 }
                 else
                 {
-                    Log.LogWarning("[GLDEV] console not ready, dropped: " + line);
+                    Log.LogError("[GLDEV] FAIL console not ready: " + line);
+                    failed = true;
                 }
             }
             Marker(failed ? "CMD DONE (FAILED)" : "CMD DONE");

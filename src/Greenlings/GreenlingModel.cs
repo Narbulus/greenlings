@@ -102,6 +102,21 @@ namespace Greenlings
 
         public static string ModelDir => Path.Combine(Path.GetDirectoryName(typeof(GreenlingModel).Assembly.Location), "models");
 
+        /// <summary>Loaded names in their actual seed order, for dev fixtures and diagnostics.</summary>
+        public static string[] BodyNames(string prefab) => _pools.TryGetValue(prefab, out var pool)
+            ? pool.Select(b => b.name).ToArray() : Array.Empty<string>();
+
+        /// <summary>Select an existing pooled body on one owned actor without forcing the whole species.</summary>
+        public static bool SelectBody(Greenling actor, string name)
+        {
+            if (!actor || !actor.IsOwner) return false;
+            var names = BodyNames(Utils.GetPrefabName(actor.gameObject));
+            var index = Array.IndexOf(names, name);
+            if (index < 0) return false;
+            actor.Zdo.Set(ZBody, index);
+            return true;
+        }
+
         /// <summary>(Re)load every pool. Returns a one-line report.</summary>
         public static string LoadAll()
         {

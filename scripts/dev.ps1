@@ -18,6 +18,7 @@ param(
     [Parameter(Position = 0)][ValidateSet('run', 'build', 'launch', 'cmd', 'test', 'stop', 'log')][string]$Action = 'run',
     [Parameter(Position = 1, ValueFromRemainingArguments)][string[]]$Commands,
     [int]$Lines = 60,
+    [switch]$Visible,
     [int]$TimeoutSec = 180
 )
 $ErrorActionPreference = 'Stop'
@@ -68,7 +69,7 @@ function Wait-Log([string]$Pattern, [long]$From, [int]$Timeout = $TimeoutSec, [s
                 $pos = $fs.Length
             } finally { $fs.Dispose() }
             foreach ($l in ($text -split "`r?`n")) {
-                if ($Echo -and $l -match '\[GLDEV\]|\[console\]|\[GLEVT\]|\[GLDUMP\]|Error|Exception') { Write-Host "  $($l -replace '^\[\w+\s*:[^\]]*\] ', '')" }
+                if ($Echo -and $l -match '\[GLDEV\]|\[GLARENA\]|\[GLPERF\]|\[console\]|\[GLEVT\]|\[GLDUMP\]|Error|Exception') { Write-Host "  $($l -replace '^\[\w+\s*:[^\]]*\] ', '')" }
                 if ($l -match $Pattern) { return $l }
             }
         }
@@ -86,7 +87,8 @@ function Start-DevGame {
     $gameArgs = @('--doorstop-enabled', 'true', '--doorstop-target-assembly', "`"$preloader`"", '-console')
     $sw = [Diagnostics.Stopwatch]::StartNew()
     if (Test-Path $Log) { Remove-Item $Log -ErrorAction SilentlyContinue }
-    Start-Process -FilePath "$GameDir\valheim.exe" -ArgumentList $gameArgs -WorkingDirectory $GameDir | Out-Null
+    $windowStyle = if ($Visible) { 'Normal' } else { 'Hidden' }
+    Start-Process -FilePath "$GameDir\valheim.exe" -ArgumentList $gameArgs -WorkingDirectory $GameDir -WindowStyle $windowStyle | Out-Null
     Wait-Log '\[GLDEV\] LOADED' 0 | Out-Null
     Write-Host ("plugins loaded   {0,5:n1}s" -f $sw.Elapsed.TotalSeconds)
     Wait-Log '\[GLDEV\] MENU' 0 | Out-Null
@@ -121,15 +123,20 @@ switch ($Action) {
     'run'    { Assert-NoOtherGame; Stop-DevGame; Invoke-Build; Start-DevGame }
     'cmd'    { Send-Commands $Commands }
     'test'   {
-        if (-not $Commands) { $Commands = Get-ChildItem "$Root\tests" -Filter '*.txt' | Where-Object { $_.Name -notlike '_*' -and $_.Name -notlike 'persist-*' } | ForEach-Object FullName }
+        if (-not $Commands) { $Commands = Get-ChildItem "$Root\tests" -Filter '*.txt' | Where-Object { $_.Name -notlike '_*' -and $_.Name -notlike 'persist-*' -and $_.Name -notlike 'arena-*' } | ForEach-Object FullName }
         $results = foreach ($t in $Commands) {
             $name = Split-Path $t -Leaf
             Write-Host "== $name"
             $sw = [Diagnostics.Stopwatch]::StartNew()
-            try { Send-Commands (Expand-Test (Resolve-Path $t)); $ok = $true } catch { Write-Host "   $_"; $ok = $false }
-            [pscustomobject]@{ Test = $name; Result = $(if ($ok) { 'PASS' } else { 'FAIL' }); Seconds = [math]::Round($sw.Elapsed.TotalSeconds) }
+            $failure = $null
+            try { Send-Commands (Expand-Test (Resolve-Path $t)); $ok = $true } catch { Write-Host "   $_"; $ok = $false; $failure = $_.ToString() }
+            [pscustomobject]@{ Test = $name; Result = $(if ($ok) { 'PASS' } else { 'FAIL' }); Seconds = [math]::Round($sw.Elapsed.TotalSeconds, 1); Error = $failure }
         }
         $results | Format-Table -AutoSize | Out-String | Write-Host
+        $reportDir = Join-Path $Root '.work'
+        New-Item -ItemType Directory -Force $reportDir | Out-Null
+        [pscustomobject]@{ Timestamp = (Get-Date).ToUniversalTime().ToString('o'); Tests = @($results) } |
+            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $reportDir 'test-results.json') -Encoding utf8
         if ($results.Result -contains 'FAIL') { exit 1 }
     }
     'stop'   { Stop-DevGame }

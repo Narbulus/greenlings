@@ -93,8 +93,12 @@ def download(task, out_dir):
         if isinstance(url, str) and url.startswith("http"):
             ext = os.path.splitext(url.split("?")[0])[1] or ".bin"
             path = os.path.join(out_dir, key + ext)
-            with open(path, "wb") as f:
-                f.write(requests.get(url, timeout=300).content)
+            response = requests.get(url, timeout=300)
+            response.raise_for_status()
+            temporary = path + ".part"
+            with open(temporary, "wb") as f:
+                f.write(response.content)
+            os.replace(temporary, path)
             saved[key] = path
     with open(os.path.join(out_dir, "task.json"), "w", encoding="utf-8") as f:
         json.dump({k: v for k, v in task.items() if k != "output"}, f, indent=1)

@@ -21,8 +21,8 @@ What's in the mod as of **0.7.0**, and how sure we are that it works.
 | Strays: random Norse-ish name, mischief only, can't be taught | <span class="st ok">tested</span> | `bonding` |
 | Trust from pats (with cooldown), food, and being nearby | <span class="st ok">tested</span> | `bonding`, `feeding` |
 | Strays tag along after a pat or treat | <span class="st ok">tested</span> | `follow` |
-| Green tint and head sprout grow with trust | <span class="st built">built</span> | checked visually |
-| Head sprouts pinned to the skull (crown vertices on the head bone) | <span class="st built">built</span> | checked visually (old model only) |
+| Green tint grows with trust | <span class="st built">built</span> | checked visually |
+| Head decorations authored in the asset pipeline; no runtime sprouts | <span class="st built">built</span> | model and decoration exports |
 | Rename (Shift+E) | <span class="st ok">tested</span> | `persist-1/2` |
 | Wild greylings hostile to greenlings | <span class="st ok">tested</span> | `hostility` |
 

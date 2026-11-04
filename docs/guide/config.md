@@ -23,9 +23,6 @@ Most take effect immediately. The taming items (`[Taming] Item`, `BruteItems`), 
 
 | Setting | Default | What it does |
 |---|---|---|
-| `HeadPlants` | Pickable_Mushroom, Pickable_Dandelion, Pickable_Thistle, shrub_2, Bush02_en, Beech_small1, FirTree_small | Plants that can grow on a greenling's head: forest things (prefab names; one is picked at random per greenling, empty = none). |
-| `SproutHeight` | 0.02 | How far above the top of the head the plant sits (meters). |
-| `SproutSize` | 2.0 | Size multiplier for head plants. |
 | `TamedTint` | RGB 0.55, 1, 0.45 | Color multiplied onto a tamed greyling's skin. |
 
 ## Bonding

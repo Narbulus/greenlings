@@ -5,7 +5,7 @@
 - [ ] **Doors scenario test.** Build an enclosure from a test script and check open, walk through, close.
 - [ ] **Scenario tests** for chasing birds and animals, help-a-friend, and a brute + greydwarf crew working together.
 - [ ] **Sound check.** Does the trust-gain chirp sound right?
-- [ ] **Custom greenling model.** A remodelled greyling with the head sprout sitting in its new crown.
+- [ ] **Custom greenling model.** Remodelled bodies with head decorations authored in the asset pipeline.
 - [ ] **Git history.** Bring the project history over to this repo and push it to GitHub. This wiki then deploys from there.
 
 ## Before a first release

@@ -24,6 +24,7 @@ namespace Greenlings.DevTools
 
         /// <summary>The instance most recently placed by gldev_place, else the nearest one.</summary>
         private static T Nearest<T>(string prefab) where T : Component =>
+            prefab.StartsWith("@") ? TestGrounds.Resolve(prefab).GetComponent<T>() :
             LastPlaced.TryGetValue(prefab, out var last) && last && last.GetComponent<T>() ? last.GetComponent<T>() :
             Object.FindObjectsByType<T>(FindObjectsSortMode.None)
                 .Where(c => prefab == "*" || Utils.GetPrefabName(c.gameObject) == prefab)
@@ -50,6 +51,7 @@ namespace Greenlings.DevTools
                 .FirstOrDefault();
 
         private static GameObject NearestObject(string prefab) =>
+            prefab.StartsWith("@") ? TestGrounds.Resolve(prefab) :
             LastPlaced.TryGetValue(prefab, out var last) && last ? last :
             Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None)
                 .Where(v => v.IsValid() && Utils.GetPrefabName(v.gameObject) == prefab)
@@ -66,7 +68,7 @@ namespace Greenlings.DevTools
             dir.y = 0;
             var pos = to + (dir.sqrMagnitude > 0.01f ? dir.normalized : Vector3.back) * 2f;
             ZoneSystem.instance.GetGroundHeight(pos, out var y);
-            pos.y = y;
+            pos.y = target.GetComponentInParent<ZNetView>()?.GetZDO()?.GetString(TestGrounds.Tag).Length > 0 ? to.y + 0.2f : y;
             SetPlayerPos(pos, Quaternion.LookRotation(new Vector3(to.x - pos.x, 0, to.z - pos.z)));
         }
 
@@ -94,6 +96,19 @@ namespace Greenlings.DevTools
 
         private static void Postfix()
         {
+            Cmd("gldev_actor", "<name> <prefab> <bay> [x=0] [z=0] [body] spawn a bonded named arena actor", a =>
+            {
+                if (a.Length > 6 && !GreenlingModel.BodyNames(a[2]).Contains(a[6])) throw new System.ArgumentException("unknown pooled body " + a[6]);
+                TestGrounds.SpawnActor(a[1], a[2], a[3], a.TryParameterFloat(4), a.TryParameterFloat(5));
+                _lastTame = TestGrounds.Resolve(a[1]);
+                if (a.Length > 6 && !GreenlingModel.SelectBody(_lastTame.GetComponent<Greenling>(), a[6])) throw new System.InvalidOperationException("could not select actor body");
+            });
+            Cmd("gldev_select", "<@fixture> select an exact actor/object for existing interaction commands", a =>
+            {
+                var go = TestGrounds.Resolve(a[1]);
+                LastPlaced[Utils.GetPrefabName(go)] = go;
+                if (go.GetComponent<Tameable>()) _lastTame = go;
+            });
             Cmd("gldev_setup", "[play] tests: god+ghost on, auto-pickup off, empty inventory. 'play': god on, ghost off, auto-pickup on, inventory kept", a =>
             {
                 var play = a.Length > 1 && a[1] == "play";
@@ -162,6 +177,7 @@ namespace Greenlings.DevTools
                         .Where(t => t != null).SelectMany(t => t.m_pieces).Where(x => x).Select(x => x.name));
                 foreach (var v in Object.FindObjectsByType<ZNetView>(FindObjectsSortMode.None))
                     if (v && v.IsValid() && buildable.Contains(Utils.GetPrefabName(v.gameObject))
+                        && v.GetZDO().GetString(TestGrounds.Tag).Length == 0
                         && Vector3.Distance(v.transform.position, P.transform.position) < 40f)
                     {
                         if (!v.IsOwner()) v.ClaimOwnership();

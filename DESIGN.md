@@ -89,7 +89,8 @@ container).
 **Two-stage taming.** Coins make a wild greyling interested: it is tamed (not hostile, stays) but is
 a **Stray**: wanders camp, mischief only, can't be taught. **Bonding** (0-100) grows by feeding it
 real food (not coins), pats (with a cooldown), and time spent near the player. It turns gradually
-greener and its head sprout grows with the bond. At 100 it is a **Greenling** and can be taught.
+greener as its bond grows. Head decorations are authored in the asset pipeline, rather than spawned
+or grown at runtime. At 100 it is a **Greenling** and can be taught.
 
 **Charm.** Staring at you; bringing you little gifts (like a cat with a bird); clumsy mimicry of what
 you do; emergent **traits**; greenlings noticing and reacting to each other's antics (but never

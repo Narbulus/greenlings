@@ -1,0 +1,16 @@
+# Requires the populated arena-showcase; keep authored decorations, remove runtime sprouts.
+# Explicit selection only, like the other arena scenarios.
+!wait 2
+!assert @Beak runtimePlants == 0
+!assert @GDv10 runtimePlants == 0
+!assert @Round runtimePlants == 0
+!assert @Stump runtimePlants == 0
+!assert @Young runtimePlants == 0
+!assert @Brute-One runtimePlants == 0
+!assert @Brute-Two runtimePlants == 0
+!assert @Brute-Three runtimePlants == 0
+!assert @Greyling runtimePlants == 0
+!assert @Shaman runtimePlants == 0
+!assert @hauler runtimePlants == 0
+!assert @Young assetDecor > 0
+gldev_arena snapshot

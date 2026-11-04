@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased (2026-11-03)
+
+- Removed randomly spawned head plants and their growth/configuration logic. Head decorations now
+  come from the authored model/decor assets. Existing saved sprout data is ignored.
+
 ## 0.7.0: shamans and tools (2026-11-02)
 
 **Shamans** (tamed with thistle)

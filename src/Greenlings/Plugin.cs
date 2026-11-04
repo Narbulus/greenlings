@@ -44,9 +44,6 @@ namespace Greenlings
         internal static ConfigEntry<float> CasualAttention;
         internal static ConfigEntry<string> UnderstandingSfx;
 
-        internal static ConfigEntry<string> SproutPrefabs;
-        internal static ConfigEntry<float> SproutHeight;
-        internal static ConfigEntry<float> SproutSize;
         internal static ConfigEntry<float> ActionTime;
 
         internal static ConfigEntry<int> CarryMax;
@@ -108,11 +105,6 @@ namespace Greenlings
             FedDuration = Config.Bind("Taming", "FedDuration", 60f, "Seconds one eaten item keeps a greyling fed (taming only progresses while fed).");
             CoinSearchRange = Config.Bind("Taming", "SearchRange", 10f, "How far greylings notice the taming item on the ground (boars notice food at 5m).");
 
-            SproutPrefabs = Config.Bind("Visuals", "HeadPlants",
-                "Pickable_Mushroom,Pickable_Dandelion,Pickable_Thistle,shrub_2,Bush02_en,Beech_small1,FirTree_small",
-                "Plants that can grow on a greenling's head: forest things (prefab names; one is picked at random per greenling, empty = none).");
-            SproutHeight = Config.Bind("Visuals", "SproutHeight", 0.02f, "How far above the top of the head the plant sits (meters).");
-            SproutSize = Config.Bind("Visuals", "SproutSize", 2.0f, "Size multiplier for head plants.");
             TamedTint = Config.Bind("Visuals", "TamedTint", new Color(0.55f, 1f, 0.45f), "Color multiplied onto a tamed greyling's skin.");
 
             StartBond = Config.Bind("Bonding", "StartBond", 0f, "Trust (0-100) a greyling has right after taming. At 100 it can be taught.");

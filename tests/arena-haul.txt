@@ -1,0 +1,33 @@
+# Fixed test grounds: teach through real inventory interactions, assert the outcome without images.
+# Explicit opt-in: dev.ps1 test tests/arena-haul.txt (excluded from the legacy suite).
+gldev_setup
+tod 0.5
+env Clear
+gldev_arena reset
+!waitfor GLARENA\] ready 40
+gldev_arena goto haul
+gldev_actor hauler Greyling haul 0 0
+!wait 2
+!assert @hauler bond == 100
+gldev_fill @haul/source Wood 8
+!assert @haul/source count:Wood == 8
+!assert @haul/sink count:Wood == 0
+gldev_give Coins 1
+gldev_useitem Coins
+!waitfor GLEVT\] state .*to=Watching 5
+gldev_open @haul/source
+!wait 0.5
+gldev_take Wood 5
+gldev_close
+gldev_open @haul/sink
+!wait 0.5
+gldev_put Wood 5
+gldev_close
+!waitfor GLEVT\] learned .*Wood: 5
+!assert @hauler state == Working
+gldev_arena trace 30 2
+!eventually 90 @haul/sink count:Wood == 8
+!assert @haul/source count:Wood == 0
+!assert @haul/sink count:Wood == 8
+!assert @hauler carry == 0
+gldev_arena snapshot

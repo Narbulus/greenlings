@@ -39,6 +39,10 @@ Persistence across a restart is a two-part scenario:
 
 ### Observability
 
+**Fixed test grounds:** [layout, exact targets, text snapshots, movement traces and assertions](docs/dev/test-grounds.md).
+Run `./scripts/dev.ps1 test tests/arena-haul.txt` for the first end-to-end scenario.
+Screenshots are opt-in (`greenlings.devtools` config: `Evidence.Screenshots=true`); text is the default evidence.
+
 - **`[GLEVT]` log lines**: every greenling decision as a one-line event
   (`state`, `curiosity`, `pat`, `pat_refused`, `gift`, `demo_source`, `demo_sink`, `lesson`,
   `learned`, `take`, `deposit`, `wait`, `drop`, `lost_interest`, `task_broken`).

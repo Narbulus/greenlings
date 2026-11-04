@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Linq;
 using UnityEngine;
 
@@ -7,24 +6,20 @@ namespace Greenlings
     /// <summary>
     /// Greenling looks that depend on synced state, rendered the same on every client:
     /// the tool it holds (right hand), the item it is carrying (right hand, or left if it holds a
-    /// tool) and the plant sprouting from its head.
+    /// tool). Head decoration is authored in the model asset pipeline.
     /// </summary>
     public class CarryVisual : MonoBehaviour
     {
-        internal const string ZSprout = "gl_sprout"; // "prefab|scale|yaw"
-
         private Greenling _g;
-        private Transform _hand, _leftHand, _head, _headTip;
-        private GameObject _carryModel, _sproutModel, _toolModel;
-        private string _shownCarry = "", _shownSprout = "", _shownTool = "";
+        private Transform _hand, _leftHand;
+        private GameObject _carryModel, _toolModel;
+        private string _shownCarry = "", _shownTool = "";
 
         private void Awake()
         {
             _g = GetComponent<Greenling>();
             _hand = Models.Find(transform, "r_hand") ?? Models.Find(transform, "l_hand");
             _leftHand = Models.Find(transform, "l_hand") ?? _hand;
-            _head = Models.Find(transform, "head");
-            _headTip = Models.Find(transform, "head_end") ?? _head;
             InvokeRepeating(nameof(Refresh), 0.5f, 0.25f);
         }
 
@@ -33,7 +28,6 @@ namespace Greenlings
             if (_g.Zdo == null) return;
             RefreshTool();
             RefreshCarry();
-            RefreshSprout();
         }
 
         private void RefreshCarry()
@@ -72,110 +66,6 @@ namespace Greenlings
             if (!Grip.Fit(_toolModel, _hand, transform, _g.Character, out var pos, out var rot, out var scale)) { Destroy(_toolModel); _toolModel = null; return; }
             Models.AttachWorld(_toolModel, _hand, pos, rot, scale);
             _g.Event("tool_model", $"item={tool} scale={scale:0.00}");
-        }
-
-        private void RefreshSprout()
-        {
-
-            // plants that are no longer on the list (e.g. the glowing mushrooms) get re-rolled
-            if (_g.IsGreenling && _g.IsOwner && !Allowed(_g.Zdo.GetString(ZSprout))) PickSprout();
-
-            var want = _g.IsGreenling ? _g.Zdo.GetString(ZSprout) : "";
-            // config changes (height/size) and model swaps rebuild the sprout, so it can be tuned live with gldev_cfg
-            var skin = HeadSkin();
-            want += string.Format(CultureInfo.InvariantCulture, "#{0}#{1}#{2}#{3}", Plugin.SproutHeight.Value, Plugin.SproutSize.Value, Growth(),
-                                  skin ? skin.sharedMesh.GetInstanceID() : 0);
-            if (want == _shownSprout) return;
-            _shownSprout = want;
-            if (_sproutModel) Destroy(_sproutModel);
-            _sproutModel = null;
-            var stored = want.Substring(0, want.IndexOf('#'));
-            if (stored.Length == 0 || stored == "none" || !_head) return;
-
-            var p = stored.Split('|');
-            var prefab = ZNetScene.instance.GetPrefab(p[0]);
-            if (!prefab) return;
-            var growth = Growth();
-            if (growth <= 0f) return; // not sprouted yet
-            var scale = float.Parse(p[1], CultureInfo.InvariantCulture) * Plugin.SproutSize.Value * growth;
-            var yaw = float.Parse(p[2], CultureInfo.InvariantCulture);
-            _sproutModel = Models.Visual(prefab, "GreenlingSprout_" + p[0]);
-            // Plant it in the hollow on top of the skull: found from the mesh itself (the top of the
-            // vertices skinned to the head), and parented to the bone that moves them, so it stays put.
-            if (Crown.Find(skin, _head, out var bone, out var local, out var up))
-            {
-                _sproutModel.transform.SetParent(bone, false);
-                _sproutModel.transform.localPosition = local + up * (Plugin.SproutHeight.Value / Mathf.Max(bone.lossyScale.y, 0.0001f));
-                _sproutModel.transform.localRotation = Quaternion.FromToRotation(Vector3.up, up) * Quaternion.Euler(0f, yaw, 0f);
-                var s = bone.lossyScale;
-                _sproutModel.transform.localScale = new Vector3(scale / s.x, scale / s.y, scale / s.z);
-                _sproutModel.SetActive(true);
-                LogModel("sprout_model", _sproutModel, bone);
-                return;
-            }
-            // no skinned head to read (shouldn't happen): fall back to the old estimate
-            var mid = Vector3.Lerp(_head.position, _headTip.position, 0.45f);
-            var crown = new Vector3(mid.x, _headTip.position.y + Plugin.SproutHeight.Value, mid.z);
-            Models.AttachWorld(_sproutModel, _head, crown, Quaternion.Euler(0f, transform.eulerAngles.y + yaw, 0f), scale);
-            LogModel("sprout_model", _sproutModel, _head);
-        }
-
-        /// <summary>Where a visual actually ended up (renderers, world bounds vs. the bone) — for tuning without screenshots.</summary>
-        private void LogModel(string kind, GameObject model, Transform bone)
-        {
-            var rs = model.GetComponentsInChildren<Renderer>(true);
-            var active = rs.Count(r => r.enabled && r.gameObject.activeInHierarchy);
-            var b = rs.Length > 0 ? rs[0].bounds : new Bounds(model.transform.position, Vector3.zero);
-            foreach (var r in rs) b.Encapsulate(r.bounds);
-            _g.Event(kind, string.Format(CultureInfo.InvariantCulture,
-                "name={0} renderers={1}/{2} center={3:0.00},{4:0.00},{5:0.00} size={6:0.00},{7:0.00},{8:0.00} bone={9}@{10:0.00},{11:0.00},{12:0.00} boneUp={13:0.0},{14:0.0},{15:0.0} boneScale={16:0.000}",
-                model.name, active, rs.Length, b.center.x, b.center.y, b.center.z, b.size.x, b.size.y, b.size.z,
-                bone.name, bone.position.x, bone.position.y, bone.position.z, bone.up.x, bone.up.y, bone.up.z, bone.lossyScale.x));
-        }
-
-        /// <summary>
-        /// How grown the sprout is: nothing for a brand-new stray, a seedling that grows with trust,
-        /// full size once it is a Greenling. Stepped so the model is not rebuilt constantly.
-        /// </summary>
-        private float Growth()
-        {
-            if (!_g.IsStray) return 1f;
-            var bond = _g.Bond;
-            return bond < 8f ? 0f : Mathf.Round(Mathf.Lerp(0.3f, 0.9f, bond / 100f) * 10f) / 10f;
-        }
-
-        private SkinnedMeshRenderer HeadSkin() =>
-            GetComponentsInChildren<SkinnedMeshRenderer>(true)
-                .Where(r => r.sharedMesh && r.bones.Contains(_head))
-                .OrderByDescending(r => r.sharedMesh.vertexCount).FirstOrDefault();
-
-        private static bool Allowed(string stored)
-        {
-            if (stored.Length == 0) return false;
-            var plant = stored.Split('|')[0];
-            return plant == "none" || Plugin.SproutPrefabs.Value.Split(',').Any(x => x.Trim() == plant);
-        }
-
-        /// <summary>Owner rolls a sprout once; it is stored in the ZDO so it only changes if the plant list does.</summary>
-        private void PickSprout()
-        {
-            var options = Plugin.SproutPrefabs.Value.Split(',');
-            var choice = options[Random.Range(0, options.Length)].Trim();
-            if (choice.Length == 0 || !ZNetScene.instance.GetPrefab(choice)) choice = "none";
-            var scale = SproutScale(choice) * Random.Range(0.8f, 1.2f);
-            var value = string.Format(CultureInfo.InvariantCulture, "{0}|{1:0.###}|{2:0}", choice, scale, Random.Range(0f, 360f));
-            _g.Zdo.Set(ZSprout, value);
-            _g.Event("sprout", "plant=" + choice);
-        }
-
-        /// <summary>Plants come in very different sizes; shrink the big ones more.</summary>
-        private static float SproutScale(string prefab)
-        {
-            if (prefab.StartsWith("Pickable_Mushroom")) return 0.35f;
-            if (prefab.StartsWith("Pickable_")) return 0.25f;
-            if (prefab.Contains("sapling")) return 0.2f;
-            if (prefab.StartsWith("Beech_small") || prefab.StartsWith("FirTree_small")) return 0.05f;
-            return 0.06f; // bushes and shrubs
         }
     }
 

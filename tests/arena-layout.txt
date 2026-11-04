@@ -1,0 +1,17 @@
+# Repeatable layout, stable selectors and assertions; no screenshots.
+gldev_setup
+gldev_arena reset
+!waitfor GLARENA\] ready 40
+gldev_arena goto social
+gldev_actor small Greyling social -3 0
+gldev_actor worker Greydwarf social 0 0
+gldev_actor healer Greydwarf_Shaman social 3 0
+gldev_actor brute Greydwarf_Elite social 0 4
+!wait 2
+!assert @small bond == 100
+!assert @worker carry == 0
+!assert @haul/source count:Wood == 0
+!assert @machines/source count:Wood == 0
+!assert @doors/source count:Wood == 0
+gldev_arena snapshot
+!waitfor GLARENA\] site\|vegetation=0\| 3

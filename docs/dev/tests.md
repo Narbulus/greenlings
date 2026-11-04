@@ -10,10 +10,13 @@ Each file in `tests/` is a script the dev harness plays against the running game
 ./scripts/dev.ps1 test tests/teach-haul.txt    # just one
 ```
 
-## Scenarios (38)
+## Scenarios (41)
 
 | Test | What it checks |
 |---|---|
+| `arena-haul` | Fixed test grounds: teach through real inventory interactions, assert the outcome without images. Explicit opt-in: dev.ps1 test tests/arena-haul.txt (excluded from the legacy suite). |
+| `arena-head-decor` | Requires the populated arena-showcase; keep authored decorations, remove runtime sprouts. Explicit selection only, like the other arena scenarios. |
+| `arena-layout` | Repeatable layout, stable selectors and assertions; no screenshots. |
 | `bonding` | A freshly tamed greyling is a stray with a name of its own; trust comes from pats (with a cooldown), food and company; at 100 it becomes a teachable greenling. |
 | `chores` | With nothing to do, greenlings tidy loose things into the chest they belong in, and pick up simple chores by watching you (no coin). |
 | `cook-job` | Two demonstrations make a two-step job: meat onto the cooking station, cooked meat back into the chest. Any meat the station takes will do, not just the one shown. |
