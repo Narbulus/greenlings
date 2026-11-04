@@ -1,0 +1,12 @@
+EDIT this image. Do not redraw it from scratch.
+
+Keep the image exactly as it is: the same four views in the same places at the same size, the same silhouette, pose, proportions, belly, eyes, twigs, moss patches, background, and the same low-poly Valheim model and hand-painted bark-and-moss texture.
+
+The HEAD must keep exactly the same outline and size as now in every view. In the two side views the face must stick out forward exactly as far as it does now: do not make the head longer, deeper, taller or more forward, and do not change its profile.
+
+Change ONLY the painting and the gentle surface shape of the lower face, inside the existing head outline:
+1. Chin: below the eyes, the front of the face continues downward as a flat, slightly elongated wooden plank, a little like the original Valheim Greydwarf's long plank face but shorter and softer, with rounded corners. It sits flat on the front of the face and stays within the current head outline (it may extend a little lower on the chest, by no more than a quarter of the face height).
+2. Nose: no protruding nose. Suggest it only with two-tone painting: a lighter warm tan strip down the centre of the face from between the eyes onto the plank, with darker brown on either side.
+3. No mouth, no lips, no smile line.
+
+Do not change anything else.

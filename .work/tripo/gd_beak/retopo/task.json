@@ -1,0 +1,16 @@
+{
+ "type": "highpoly_to_lowpoly",
+ "status": "success",
+ "progress": 100,
+ "input": {
+  "bake": true,
+  "quad": false,
+  "smart_uv": true,
+  "face_limit": 1500,
+  "original_model_id": "4da7a526-46b3-4f90-920c-2cf17c4f9e56"
+ },
+ "task_id": "e22d747b-3c79-4d17-a846-27c8e34b15b9",
+ "created_at": "2026-11-03T02:35:34.177057Z",
+ "completed_at": "2026-11-03T02:36:19.366814Z",
+ "credits_consumed": 35.0
+}

@@ -1,0 +1,4 @@
+task 1c6d0760-39cb-488f-8fa1-f06b02d6b6f7
+status success
+{'model_url': '.work/tripo/gd_stump\\model_url.glb', 'rendered_image_url': '.work/tripo/gd_stump\\rendered_image_url.webp'}
+balance before {'balance': 2495.0, 'frozen': 0.0} after {'balance': 2340.0, 'frozen': 95.0}

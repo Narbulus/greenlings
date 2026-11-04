@@ -1,0 +1,6 @@
+EDIT this image. Do not redraw it from scratch. Keep everything exactly as it is (all four views, silhouette, pose, proportions, belly, beak, twigs, background, low-poly Valheim model and hand-painted texture) and change ONLY the eyes, consistently in all views where they are visible:
+
+- Make the eyes a little smaller: about 80% of their current size (still slightly larger than the original Valheim Greydwarf's eyes).
+- Make them as simple and low-detail as the original Valheim eyes: each eye is just a small flat glowing shape of soft pale yellow, with no iris, no pupil, no highlight, no rim, no shading detail. Like a simple low-poly glowing slit-oval on the face.
+
+No mouth. Do not change anything else.

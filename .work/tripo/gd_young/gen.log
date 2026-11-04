@@ -1,0 +1,4 @@
+task afc3448d-fb49-4254-9779-2e739b4771ac
+status success
+{'model_url': '.work/tripo/gd_young\\model_url.glb', 'rendered_image_url': '.work/tripo/gd_young\\rendered_image_url.webp'}
+balance before {'balance': 2495.0, 'frozen': 0.0} after {'balance': 2270.0, 'frozen': 35.0}

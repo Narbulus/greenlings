@@ -1,0 +1,12 @@
+EDIT this image. Do not redraw it from scratch.
+
+The image shows one creature from the game Valheim (a Greydwarf) in four orthographic views arranged in a 2x2 grid: top left front, top right side facing right, bottom left side facing left, bottom right back. It is in a T-pose with arms straight out.
+
+Keep the image exactly as it is: same four figures in the same places at the same size, same silhouette, same pose, same proportions, same limb lengths and thickness, same arms, hands, legs and feet, same camera, same light grey background, same low-poly faceted Valheim model and the same hand-painted bark-and-moss texture style and colours. The result must still look like a Valheim asset made by Iron Gate.
+
+Make only these small, local changes, consistently in all four views:
+1. Face (on the upper chest, as now): make it rounder and softer with a gentle happy expression; make the eyes bigger and rounder with a soft pale yellow glow; make the beak shorter and smaller.
+2. Belly: give the lower torso a slight, soft rounded curve, visible from the side; keep it modest.
+3. Back: if anything sticks out on the upper back, flatten it so the back stays smooth and inside the body outline.
+
+Do not add anything: no stump, branches, horns, leaves, mushrooms, flowers, vines, weapons or accessories. Hands stay empty.

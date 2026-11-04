@@ -1,0 +1,18 @@
+This image is a character turnaround board of a creature from the game Valheim (a Greydwarf), shown in four orthographic views left to right: front, side facing right, side facing left, back. It is standing with both arms held straight out to the sides (T-pose).
+
+Redraw this exact board as a friendly, domesticated version of the same creature, called a "greenling". Keep everything the same except the changes listed:
+
+KEEP EXACTLY:
+- the same four views, in the same order and positions, same scale, same camera angles (orthographic, no perspective)
+- the same pose: arms straight out horizontally, same leg stance, feet in the same place
+- the same body proportions, limb lengths, limb thickness, shoulder height and overall silhouette
+- the same low-poly game art style, flat colours, Valheim textures: brown bark skin with patches of green moss
+- the same plain light grey background, no shadows, no ground, no text, no labels
+
+CHANGE:
+- face: rounder, softer and sweeter, with a gentle happy expression; bigger, rounder eyes (soft glowing pale yellow); shorter, smaller beak/nose
+- belly: slightly rounded and soft, a small pot belly
+- back: only a small, low mossy stone patch on the upper back that stays inside the body outline; nothing sticking out past the shoulders
+- the top of the head ends in a short open neck: no stump, no branches, no twigs, no horns on the head or shoulders
+
+DO NOT ADD: weapons, clubs, accessories, leaves, mushrooms, flowers, vines, rope, extra decorations, or anything held in the hands. The hands stay empty with the fingers spread like the original.

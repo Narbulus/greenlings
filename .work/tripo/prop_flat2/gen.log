@@ -1,0 +1,4 @@
+task 7944871b-c8ca-43ef-a5de-8d674929f946
+status success
+{'model_url': '.work/tripo/prop_flat2\\model_url.glb', 'rendered_image_url': '.work/tripo/prop_flat2\\rendered_image_url.webp'}
+balance before {'balance': 2235.0, 'frozen': 0.0} after {'balance': 2175.0, 'frozen': 0.0}

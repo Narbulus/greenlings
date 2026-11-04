@@ -1,0 +1,4 @@
+task 529286cd-05d7-4968-aab6-6e51783a29ef
+status success
+{'model_url': '.work/tripo/prop_mush/retopo\\model_url.glb', 'rendered_image_url': '.work/tripo/prop_mush/retopo\\rendered_image_url.webp'}
+balance before {'balance': 2010.0, 'frozen': 0.0} after {'balance': 1975.0, 'frozen': 0.0}

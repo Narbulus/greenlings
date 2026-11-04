@@ -1,0 +1,4 @@
+task 66333f8f-09e1-41cd-9eaf-9180efebdf7e
+status success
+{'model_url': '.work/tripo/gd_young/retopo\\model_url.glb', 'rendered_image_url': '.work/tripo/gd_young/retopo\\rendered_image_url.webp'}
+balance before {'balance': 2270.0, 'frozen': 35.0} after {'balance': 2235.0, 'frozen': 0.0}

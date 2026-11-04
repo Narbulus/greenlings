@@ -1,0 +1,9 @@
+Two images are attached. EDIT the FIRST image. The SECOND image is the original Valheim Greydwarf, given only as a reference for its face.
+
+Keep the first image exactly as it is (all four views, silhouette, pose, proportions, belly, eyes, twigs, background, low-poly Valheim model and hand-painted texture) and change ONLY the lower face, consistently in all views:
+
+1. Chin: bring back the original Greydwarf's distinctive long, flat, plank-like chin: below the eyes the face continues downward as a flat, elongated board of wood, like in the second image. Make it slightly shorter and softer than the original, with gently rounded edges, so the face stays sweet, but it must clearly read as that long plank face and not as a round monkey-like face.
+2. Nose: no separate protruding nose. Instead, like the original, suggest the nose only with two-tone painting: a lighter, warm tan strip running down the centre of the face from between the eyes onto the plank chin, with darker brown bark on either side. Mostly flat, at most a very slight raised ridge. No nostrils, no holes.
+3. No mouth, no smile line.
+
+Do not change anything else.

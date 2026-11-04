@@ -1,0 +1,4 @@
+task 78182b3f-2262-49f0-8f9a-0728e1c7aeb2
+status success
+{'model_url': '.work/tripo/prop_mush\\model_url.glb', 'rendered_image_url': '.work/tripo/prop_mush\\rendered_image_url.webp'}
+balance before {'balance': 2105.0, 'frozen': 0.0} after {'balance': 2010.0, 'frozen': 0.0}

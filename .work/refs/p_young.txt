@@ -1,0 +1,6 @@
+EDIT this image. Do not redraw it from scratch. Keep the four views in the same places and size, the same body, arms, legs, belly, back, T-pose, proportions, colours and materials, the background, and this creature's head shape and personality. Make it look even more like a genuine Valheim asset by Iron Gate: low-poly, faceted, simple low-resolution hand-painted texture, no fine detail.
+
+Changes, consistently in all four views:
+1. Eyes: make them simple like the original Valheim Greydwarf's: each eye is just a small flat glowing pale-yellow shape (oval or slit), no iris, no pupil, no highlight, no rim, no shading, no detail.
+2. Top of the head: a short hollow tree-trunk stump on top of the head, like the original Greydwarf's: a stubby open trunk of bark with a rough rim, about half the head's height, sitting straight up. 
+3. In the two side views the face sticks out forward a bit more, about as far as the original Greydwarf's face, keeping its small size and big eyes. No mouth.

@@ -1,0 +1,4 @@
+EDIT this image. Do not redraw it from scratch. Keep everything exactly as it is (the four views in the same places and size, silhouette, T-pose, proportions, legs, arms, belly, eyes, plank chin, moss, stone back, background, low-poly Valheim model and hand-painted texture), with only these two changes, consistently in all four views:
+
+1. Remove the two branches/twigs that stick up from the shoulders. Where they were, the shoulders are plain, smooth bark and moss like the rest of the body. No branches, twigs or horns anywhere.
+2. The head and face sit further forward: in the two side views the face sticks out forward from the chest about one and a half times as far as it does now, like the original Valheim Greydwarf whose face juts well forward. The face itself (eyes, plank chin) keeps its look and size; only its forward position changes. In the front and back views nothing else changes.

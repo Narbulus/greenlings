@@ -1,0 +1,4 @@
+EDIT this image. Do not redraw it from scratch. Keep the four views in the same places and size, the same silhouette, T-pose, proportions, limb lengths, head shape and how far the face sticks forward, the eyes and plank chin, the background, and the same low-poly Valheim model and hand-painted texture style. It must still look like a Valheim asset made by Iron Gate. Remove any leftover twig or branch on the shoulders. No branches, leaves, mushrooms, flowers, weapons or accessories. No mouth.
+
+Make this one change, consistently in all four views:
+- Moss: much more soft, thick moss. A lush mossy coat over the shoulders, upper back and tops of the arms and thighs, in muted Valheim greens, with brown bark showing through on the face, belly, lower legs and hands.

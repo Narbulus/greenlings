@@ -1,0 +1,4 @@
+task 641f0aa6-b116-46cd-b9c7-96be424e8117
+status success
+{'model_url': '.work/tripo/leafy\\model_url.glb', 'rendered_image_url': '.work/tripo/leafy\\rendered_image_url.webp'}
+balance before {'balance': 2960.0, 'frozen': 0.0} after {'balance': 2840.0, 'frozen': 30.0}

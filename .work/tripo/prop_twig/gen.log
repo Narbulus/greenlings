@@ -1,0 +1,4 @@
+task 883a0cc6-0163-4bee-b146-8ed665e07a87
+status success
+{'model_url': '.work/tripo/prop_twig\\model_url.glb', 'rendered_image_url': '.work/tripo/prop_twig\\rendered_image_url.webp'}
+balance before {'balance': 2105.0, 'frozen': 0.0} after {'balance': 2045.0, 'frozen': 30.0}

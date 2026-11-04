@@ -1,0 +1,7 @@
+Two images are attached. EDIT the FIRST image. The SECOND image is a prop rendered from the game Valheim itself; use it ONLY as the style reference. Keep the first image's four views, positions, scale, subject and composition (same objects, same number of parts, same roots).
+
+Make it match the second image's style exactly:
+- much lower polygon count: chunky, blocky, few large flat facets, simple silhouettes, no small details, no smooth curves
+- low-resolution texture like the reference: soft blurry hand-painted colour blotches with visible chunky texels, muted earthy colours, no fine painted detail, no crisp spots or lines
+- same flat neutral lighting as the reference
+Light grey background. Nothing else changes.

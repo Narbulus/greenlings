@@ -1,0 +1,4 @@
+task 991eb6b5-8973-43db-8236-6994553d5326
+status success
+{'model_url': '.work/tripo/mushroom\\model_url.glb', 'rendered_image_url': '.work/tripo/mushroom\\rendered_image_url.webp'}
+balance before {'balance': 2960.0, 'frozen': 0.0} after {'balance': 2840.0, 'frozen': 0.0}

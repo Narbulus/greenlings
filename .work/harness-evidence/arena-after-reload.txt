@@ -1,0 +1,19 @@
+[GLARENA] snapshot t=32.0 origin=35.0,89.0,-34.0 xyz=relative metres; path=remaining corners
+[GLARENA] doors/barrier/-2|woodwall|p=-16.0,0.3,14.0
+[GLARENA] doors/barrier/-4|woodwall|p=-18.0,0.3,14.0
+[GLARENA] doors/barrier/-6|woodwall|p=-20.0,0.3,14.0
+[GLARENA] doors/barrier/0|wood_door|p=-14.0,0.3,14.0|door=0
+[GLARENA] doors/barrier/2|woodwall|p=-12.0,0.3,14.0
+[GLARENA] doors/barrier/4|woodwall|p=-10.0,0.3,14.0
+[GLARENA] doors/barrier/6|woodwall|p=-8.0,0.3,14.0
+[GLARENA] doors/sink|piece_chest|p=-10.0,0.3,18.0|items=
+[GLARENA] doors/source|piece_chest_wood|p=-18.0,0.3,11.0|items=
+[GLARENA] haul/sink|piece_chest|p=-10.0,0.3,-17.0|items=Wood:8
+[GLARENA] haul/source|piece_chest_wood|p=-18.0,0.3,-17.0|items=
+[GLARENA] hauler|Greyling|p=-13.1,0.5,-16.2|state=Working|doing=hauling Wood to Reinforced Chest (waiting: no work)|carry=:0|bond=100|hp=20|goal=-|path=not_requested
+[GLARENA] machines/kiln|charcoal_kiln|p=18.0,0.3,-11.0|queue=0|fuel=0.0
+[GLARENA] machines/sink|piece_chest|p=18.0,0.3,-17.0|items=
+[GLARENA] machines/smelter|smelter|p=11.0,0.3,-11.0|queue=0|fuel=0.0
+[GLARENA] machines/source|piece_chest_wood|p=10.0,0.3,-17.0|items=
+[GLARENA] social/sink|piece_chest|p=18.0,0.3,11.0|items=
+[GLARENA] social/source|piece_chest_wood|p=10.0,0.3,11.0|items=

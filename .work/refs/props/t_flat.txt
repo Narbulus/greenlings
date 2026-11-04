@@ -1,0 +1,4 @@
+EDIT this image. It shows a small prop from the game Valheim in four orthographic views in a 2x2 grid (top left front, top right side, bottom left other side, bottom right back): a short hollow tree-trunk stump whose roots curl down and wrap around the shape of a creature's back. Keep the same four views, positions and scale, the same Valheim low-poly faceted look and the same hand-painted bark and moss texture style and colours, light grey background, no creature, no ground, no shadows.
+
+Redraw it as a standalone prop, with this change:
+- The same short hollow trunk standing upright, with 4 to 5 roots spread out FLAT and long sideways from its base, radiating outward in a flat star like a stump pulled from the ground, roots thinning to points, all roots lying in one flat plane at the base.

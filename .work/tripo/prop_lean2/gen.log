@@ -1,0 +1,4 @@
+task 0b958a48-47e4-486e-860c-36e38ac22c0b
+status success
+{'model_url': '.work/tripo/prop_lean2\\model_url.glb', 'rendered_image_url': '.work/tripo/prop_lean2\\rendered_image_url.webp'}
+balance before {'balance': 2235.0, 'frozen': 0.0} after {'balance': 2140.0, 'frozen': 35.0}

@@ -15,6 +15,8 @@ Spiritual successor to [RagnarsRokare/SlaveGreylings](https://github.com/di98fej
 
 ## Requirements
 
+For the Blender sources, generated working assets, runtime snapshot and full-clone instructions, see [Restoring the full project](docs/dev/restoring.md). Install Git LFS before cloning.
+
 - Valheim (Steam) and Steam running
 - .NET SDK 8+ (builds `net472`)
 - r2modman profile **GreenlingsDev** (BepInExPack only). Paths are in `Directory.Build.props`;

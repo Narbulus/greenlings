@@ -1,0 +1,9 @@
+EDIT this image. Do not redraw it from scratch. Keep everything exactly as it is (all four views, positions, sizes, silhouette, pose, proportions, belly, eyes, twigs, moss, background, low-poly Valheim model and hand-painted texture). The head keeps the same outline and does not stick out further forward in the side views.
+
+Change ONLY the plank-shaped chin below the eyes, in every view:
+- make it a little shorter (about 75% of its current length below the eyes)
+- make it taper: narrower toward the bottom than at the top
+- round off the bottom end into a soft rounded tip instead of a square edge
+Keep the lighter tan centre strip with darker sides. No nose, no nostrils, no mouth.
+
+Do not change anything else.

@@ -1,0 +1,4 @@
+task 03c5ce00-6754-4251-b4b5-d9efec149152
+status success
+{'model_url': '.work/tripo/brutes/brute3\\model_url.glb', 'rendered_image_url': '.work/tripo/brutes/brute3\\rendered_image_url.webp'}
+balance before {'balance': 2800.0, 'frozen': 0.0} after {'balance': 2680.0, 'frozen': 0.0}

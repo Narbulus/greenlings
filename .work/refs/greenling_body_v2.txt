@@ -1,0 +1,23 @@
+The attached image is a character turnaround board of a Greydwarf, a creature from the game Valheim (Iron Gate Studio), rendered from the game's own model and texture. Four orthographic views, left to right: front, side facing right, side facing left, back. Arms are held straight out to the sides (T-pose).
+
+Redraw this board as a friendly, domesticated variant of the same creature (a "greenling") that would look completely at home in Valheim, as if Iron Gate had made it.
+
+VALHEIM AESTHETIC (most important):
+- low-poly, faceted, chunky game model; large flat planes; no fine sculpted detail
+- low-resolution hand-painted textures with soft, painterly colour patches, like the original: warm brown bark skin with blotches of muted moss green
+- muted, earthy, slightly desaturated palette; no saturated or cartoon colours, no outlines, no cel shading
+- same soft neutral lighting as the input; it must read as the same game asset family as the original Greydwarf
+
+KEEP EXACTLY:
+- the same four views in the same order, positions and scale, orthographic cameras
+- the T-pose: in the front and back views the arms point straight out left and right; in the two side views the arms point straight toward and away from the camera (seen end-on, foreshortened), they are NOT folded or in front of the body
+- the same proportions, limb lengths and thickness, shoulder and hip height, leg stance and slight knee bend, feet in the same place
+- plain light grey background, no ground, no shadows, no text
+
+CHANGE (subtly):
+- face: rounder and softer, with a gentle, happy expression; bigger round eyes with a pale yellow glow; a shorter, smaller beak
+- belly: only slightly rounded, a gentle curve, not a big pot belly
+- back: a small, low patch of mossy stone on the upper back that stays inside the body outline
+- head: ends in a short open neck at the top; no stump, branches, twigs or horns
+
+DO NOT ADD: weapons, accessories, leaves, mushrooms, flowers, vines, rope, decorations, or anything in the hands. Hands empty, fingers spread like the original.

@@ -1,0 +1,4 @@
+task 6ba35b80-0e1e-4415-986b-7f76c0e85441
+status success
+{'model_url': '.work/tripo/prop_twig/retopo\\model_url.glb', 'rendered_image_url': '.work/tripo/prop_twig/retopo\\rendered_image_url.webp'}
+balance before {'balance': 2045.0, 'frozen': 30.0} after {'balance': 2010.0, 'frozen': 0.0}

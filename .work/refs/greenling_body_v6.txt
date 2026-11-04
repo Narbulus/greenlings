@@ -1,0 +1,6 @@
+EDIT this image. Do not redraw it from scratch. Keep everything exactly as it is (all four views, silhouette, pose, proportions, belly, eyes, twigs, background, low-poly Valheim model and hand-painted texture) and change ONLY the nose and the chin, consistently in all views:
+
+- Nose: make it much subtler. A small, soft, rounded bump of bark that sits flat against the face and protrudes only a little, in the low-poly style of the original Valheim Greydwarf face. Not a long beak, not a snout, no point. Smooth and simple: no nostrils, no holes, no openings, no dark spots on it.
+- Chin: give the face a clear, soft rounded chin below the nose, so the face reads as a gentle round face with a small chin. The face stays round and sweet.
+
+No mouth. Do not change anything else.

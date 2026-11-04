@@ -1,0 +1,4 @@
+task 0f0ee723-dc47-4f3a-ae5b-4cab1354e1ff
+status success
+{'model_url': '.work/tripo/sprout\\model_url.glb', 'rendered_image_url': '.work/tripo/sprout\\rendered_image_url.webp'}
+balance before {'balance': 2960.0, 'frozen': 0.0} after {'balance': 2840.0, 'frozen': 30.0}

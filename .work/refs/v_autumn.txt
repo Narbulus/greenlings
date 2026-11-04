@@ -1,0 +1,4 @@
+EDIT this image. Do not redraw it from scratch. Keep the four views in the same places and size, the same silhouette, T-pose, proportions, limb lengths, head shape and how far the face sticks forward, the eyes and plank chin, the background, and the same low-poly Valheim model and hand-painted texture style. It must still look like a Valheim asset made by Iron Gate. Remove any leftover twig or branch on the shoulders. No branches, leaves, mushrooms, flowers, weapons or accessories. No mouth.
+
+Make this one change, consistently in all four views:
+- Colour: an autumn variant. Warmer, redder brown bark, and the moss turns to muted rusty orange and ochre yellow lichen patches. Still earthy and desaturated like Valheim, not bright.

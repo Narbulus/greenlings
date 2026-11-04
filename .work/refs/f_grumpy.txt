@@ -1,0 +1,4 @@
+EDIT this image. Do not redraw it from scratch. Keep the four views in the same places and size, the same body, arms, legs, belly, back, T-pose and proportions, the same colours and materials (brown bark, muted moss, stone back), the background, and the same low-poly faceted Valheim model and hand-painted texture style. It must still look like a Valheim asset made by Iron Gate. The face stays on the front of the head and sticks out forward about as far as now in the side views. No mouth. No branches, leaves, mushrooms, flowers, weapons or accessories.
+
+Change ONLY the shape of the head and face, consistently in all four views, to give it this personality:
+- Grumpy old one: a heavy, overhanging bark brow ridge above the eyes, eyes narrowed to half-closed glowing slits under it, a short, broad, blunt square chin. Gruff but harmless.

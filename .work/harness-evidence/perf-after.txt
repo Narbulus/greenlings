@@ -1,0 +1,1 @@
+[GLPERF] fps=30.2 frameMeanMs=33.4 frameP95Ms=33.3 cpuCores=1.01 memoryMB=0 fixtures=78 arenaActors=1 loadedCharacters=25 fpsCap=30

@@ -1,0 +1,376 @@
+<title>Brute Model Pipeline</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Literata:opsz,wght@7..72,400;7..72,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+/* Layout: a field notebook for one creature. Pipeline strip, ranked findings, a two-up compare bench,
+   then one card per stage in pipeline order, then the textures laid flat. */
+:root {
+  --bg: #eef0e8;          /* lichen paper */
+  --panel: #f8f9f4;
+  --ink: #23271f;
+  --muted: #5d6556;
+  --rule: #cfd5c4;
+  --moss: #4e7a2f;        /* accent */
+  --bark: #8a5a25;        /* secondary accent */
+  --warn: #b0452a;
+  --stage-bg: #d9ddd0;    /* behind 3D models */
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Literata", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #171a15; --panel: #1f231c; --ink: #e5e8de; --muted: #a2aa97; --rule: #353b30;
+  --moss: #8cc25e; --bark: #d39a55; --warn: #e2785b; --stage-bg: #2a2f26; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #171a15; --panel: #1f231c; --ink: #e5e8de; --muted: #a2aa97; --rule: #353b30;
+  --moss: #8cc25e; --bark: #d39a55; --warn: #e2785b; --stage-bg: #2a2f26; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 48px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; line-height: 1.15; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 4.5vw, 3.1rem); letter-spacing: -0.01em; }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.15rem; }
+p { margin: 0; max-width: 68ch; }
+.label { font: 600 0.72rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--mono); font-size: 0.85em; }
+section { display: grid; gap: 18px; }
+header { display: grid; gap: 14px; }
+header p { color: var(--muted); font-size: 1.05rem; }
+
+/* pipeline strip: a real sequence, so the steps are numbered */
+.strip { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; counter-reset: step; }
+.strip li { counter-increment: step; display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); font: 500 0.9rem/1.2 var(--display); }
+.strip li::before { content: counter(step); font: 600 0.75rem/1 var(--mono); color: var(--bg); background: var(--bark);
+  border-radius: 4px; padding: 3px 6px; }
+.strip a { color: inherit; text-decoration: none; }
+.strip a:hover, .strip a:focus-visible { text-decoration: underline; }
+
+/* findings */
+.findings { display: grid; gap: 12px; }
+.finding { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; padding: 16px 18px; background: var(--panel);
+  border: 1px solid var(--rule); border-left: 4px solid var(--warn); border-radius: 6px; }
+.finding .sev { font: 600 0.72rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--warn); grid-row: span 2; padding-top: 3px; min-width: 5.5em; }
+.finding h3 { min-width: 0; }
+.finding p { min-width: 0; color: var(--ink); }
+
+/* compare bench */
+.bench { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pane { display: grid; gap: 8px; min-width: 0; }
+.pane select { font: 500 0.95rem var(--display); color: var(--ink); background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 8px 10px; width: 100%; }
+.pane select:focus-visible, button:focus-visible { outline: 2px solid var(--moss); outline-offset: 2px; }
+.pane .note { color: var(--muted); font-size: 0.92rem; min-height: 3.2em; }
+.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; color: var(--muted); font-size: 0.92rem; }
+.controls label { display: inline-flex; gap: 6px; align-items: center; }
+
+.mv, .shot { width: 100%; aspect-ratio: 4 / 5; max-width: 100%; background: var(--stage-bg); border-radius: 6px; display: block; }
+.shot { object-fit: contain; }
+.mv { position: relative; overflow: hidden; touch-action: none; cursor: grab; }
+.mv canvas { display: block; width: 100% !important; height: 100% !important; }
+.mv .loading { position: absolute; inset: 0; display: grid; place-items: center; font: 600 0.75rem var(--mono); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* stage cards */
+.stages { display: grid; gap: 28px; }
+.stage { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 24px; align-items: start;
+  padding-top: 22px; border-top: 1px solid var(--rule); }
+.stage .text { display: grid; gap: 12px; min-width: 0; }
+.stage .num { font: 600 0.8rem/1 var(--mono); color: var(--bark); letter-spacing: 0.06em; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: 0.92rem; }
+.facts dt { font: 600 0.72rem/1.9 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.look { padding: 12px 14px; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; font-size: 0.95rem; }
+.look strong { font-family: var(--display); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* textures laid flat */
+.textures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.tex { display: grid; gap: 8px; min-width: 0; }
+.tex img { width: 100%; aspect-ratio: 1; image-rendering: pixelated; border-radius: 6px; background: var(--stage-bg); }
+.tex p { font-size: 0.92rem; color: var(--muted); }
+
+footer { color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (max-width: 760px) {
+  .bench, .stage, .pair { grid-template-columns: 1fr; }
+  .textures { grid-template-columns: 1fr; }
+  .finding { grid-template-columns: 1fr; }
+  .finding .sev { grid-row: auto; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="label">Greenlings · brute 1 · full-mode generation</span>
+    <h1>Brute Model Pipeline</h1>
+    <p>One brute, followed from your concept board to the mesh the game loads. Every model here can be dragged to orbit and scrolled to zoom. The point is to see which step costs the most quality.</p>
+    <ol class="strip" aria-label="Pipeline steps">
+      <li><a href="#brief">Concept board</a></li>
+      <li><a href="#preview">Tripo preview</a></li>
+      <li><a href="#raw">Tripo raw mesh</a></li>
+      <li><a href="#cut">Cut to 3k + first bake</a></li>
+      <li><a href="#final">Cleaned, rigged, rebaked</a></li>
+      <li><a href="#game">Game skin</a></li>
+    </ol>
+  </header>
+
+  <section aria-labelledby="h-findings">
+    <h2 id="h-findings">Where quality is lost</h2>
+    <div class="findings">
+      <div class="finding">
+        <span class="sev">Biggest</span>
+        <h3>Texture: 2048 px from Tripo becomes 256 px</h3>
+        <p>The raw mesh carries a 2048 px texture with strong dark moss against light bark. We re-unwrap the simplified mesh into many small islands, bake at 1024 px, shrink to 256 px and then grade toward the vanilla palette. Each step averages contrast away. Compare stage 3 with stage 5, and the three textures at the bottom.</p>
+      </div>
+      <div class="finding">
+        <span class="sev">Bug</span>
+        <h3>The first bake misses the surface in places</h3>
+        <p>Stage 4 has black patches: the bake's ray distance was set for the old, larger scale, so rays fall short of the detailed mesh. The final rebake covers it up, but it is a sign the bake settings need fixing.</p>
+      </div>
+      <div class="finding">
+        <span class="sev">Shape</span>
+        <h3>1.48 million triangles become about 3,000</h3>
+        <p>A 500× reduction turns the knobbly shell and rope binding into smooth blobs. Vanilla brutes are only ~1,200 triangles and still read well, because their texture is crisp. So shape loss matters less than texture loss.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-bench">
+    <h2 id="h-bench">Compare any two stages</h2>
+    <div class="controls">
+      <label><input type="checkbox" id="sync" checked> Move both cameras together</label>
+      <span>Drag to orbit · scroll or pinch to zoom</span>
+    </div>
+    <div class="bench">
+      <div class="pane">
+        <select id="selA" aria-label="Left model"></select>
+        <div class="mv" id="mvA" role="img" aria-label="Left comparison model"></div>
+        <p class="note" id="noteA"></p>
+      </div>
+      <div class="pane">
+        <select id="selB" aria-label="Right model"></select>
+        <div class="mv" id="mvB" role="img" aria-label="Right comparison model"></div>
+        <p class="note" id="noteB"></p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-stages">
+    <h2 id="h-stages">The stages</h2>
+    <div class="stages">
+
+      <article class="stage" id="brief">
+        <div class="text">
+          <span class="num">Stage 1</span>
+          <h3>Concept board</h3>
+          <p>Your four-view turnaround. <span class="mono">board.py</span> cuts it into four square views at the same scale, centred on the feet so the club doesn't shift the body between views.</p>
+          <dl class="facts"><dt>Views</dt><dd>front, right, left, back</dd><dt>Size</dt><dd>1024 px each</dd></dl>
+          <div class="look"><strong>Look for:</strong> the target. Dark moss in the crevices, a knobbly shell, rope wrapped around the club.</div>
+        </div>
+        <div class="pair">
+          <img class="shot" src="brief_front.png" alt="Front view of the brute concept">
+          <img class="shot" src="brief_views.png" alt="All four views of the brute concept" style="aspect-ratio:auto">
+        </div>
+      </article>
+
+      <article class="stage" id="preview">
+        <div class="text">
+          <span class="num">Stage 2</span>
+          <h3>Tripo preview</h3>
+          <p>Tripo's own render of what it generated from the four views (full mode, 30 credits). This is Tripo's lighting, not ours.</p>
+          <div class="look"><strong>Look for:</strong> Tripo keeps the silhouette and the club well. Its texture is already a little lighter and lower in contrast than the board.</div>
+        </div>
+        <img class="shot" src="tripo_preview.png" alt="Tripo's preview render of the generated brute">
+      </article>
+
+      <article class="stage" id="raw">
+        <div class="text">
+          <span class="num">Stage 3</span>
+          <h3>Tripo raw mesh</h3>
+          <p>The model file Tripo returns, before we touch it. The real file is 1.48 million triangles (43 MB). It is shown here reduced to 300,000 so it fits on a web page; that reduction is invisible at this size.</p>
+          <dl class="facts"><dt>Triangles</dt><dd>1,483,209 (shown: 300,000)</dd><dt>Texture</dt><dd>2048 × 2048</dd></dl>
+          <div class="look"><strong>Look for:</strong> this is the best version we ever have. Everything after it can only lose detail.</div>
+        </div>
+        <div class="mv" data-model="full_raw_300k" role="img" aria-label="Tripo raw brute mesh"></div>
+      </article>
+
+      <article class="stage" id="cut">
+        <div class="text">
+          <span class="num">Stage 4</span>
+          <h3>Cut to 3k triangles + first bake</h3>
+          <p>We collapse the mesh to about 3,000 triangles, unwrap it again, and bake the raw mesh's colour onto it at 1024 px, then shrink that to 256 px with nearest-pixel filtering, like the vanilla creatures.</p>
+          <dl class="facts"><dt>Triangles</dt><dd>3,003</dd><dt>Texture</dt><dd>256 × 256</dd></dl>
+          <div class="look"><strong>Look for:</strong> the black patches are the bake bug (rays too short). The shell has lost its knobbly outline.</div>
+        </div>
+        <div class="mv" data-model="full_3k_firstbake" role="img" aria-label="Brute cut to 3,000 triangles with the first bake"></div>
+      </article>
+
+      <article class="stage" id="final">
+        <div class="text">
+          <span class="num">Stage 5</span>
+          <h3>Cleaned, rigged, rebaked</h3>
+          <p>Scaled to vanilla height, fitted to the greyling skeleton, then cleaned up automatically: the club is locked to the hand, the arms are cut free of the shell (no web between them), the legs are slimmed, the face is put on the head bone. Then a second bake onto the finished shape.</p>
+          <dl class="facts"><dt>Triangles</dt><dd>3,139</dd><dt>Texture</dt><dd>256 × 256</dd><dt>Pose</dt><dd>bind pose (T)</dd></dl>
+          <div class="look"><strong>Look for:</strong> no black patches any more, but the moss pattern is now a flat ochre wash. Compare it with stage 3 on the bench above.</div>
+        </div>
+        <div class="pair">
+          <div class="mv" data-model="full_final_rest" role="img" aria-label="Final brute mesh in the bind pose"></div>
+          <div class="mv" data-model="full_final_hang" role="img" aria-label="Final brute mesh with arms hanging"></div>
+        </div>
+      </article>
+
+      <article class="stage" id="game">
+        <div class="text">
+          <span class="num">Stage 6</span>
+          <h3>Game skin</h3>
+          <p>The texture the game loads: the final bake, colour-graded 90% toward the vanilla greyling palette so it sits with Valheim's art. In game the brute is then scaled ×1.875 onto the brute skeleton and lit by the game.</p>
+          <dl class="facts"><dt>Triangles</dt><dd>3,139</dd><dt>Texture</dt><dd>256 × 256, graded</dd></dl>
+          <div class="look"><strong>Look for:</strong> grading pulls colours together further. That is good for fitting in, but it costs more of the remaining contrast.</div>
+        </div>
+        <div class="mv" data-model="full_game_skin" role="img" aria-label="Final brute with the game skin"></div>
+      </article>
+
+      <article class="stage" id="lowpoly">
+        <div class="text">
+          <span class="num">Side branch</span>
+          <h3>Low-poly mode, raw</h3>
+          <p>The same board generated in Tripo's low-poly mode (40 credits). It arrives at 16,710 triangles with cleaner topology, so cutting it to 3,000 is only a 5.5× reduction instead of 500×.</p>
+          <dl class="facts"><dt>Triangles</dt><dd>16,710</dd><dt>Texture</dt><dd>2048 × 2048</dd></dl>
+          <div class="look"><strong>Look for:</strong> smoother, more uniform colour than full mode's raw mesh, and fewer small details such as the rope binding.</div>
+        </div>
+        <div class="mv" data-model="lp_raw" role="img" aria-label="Low-poly mode raw brute mesh"></div>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-tex">
+    <h2 id="h-tex">The textures, laid flat</h2>
+    <p>A texture is the model's skin unfolded onto a square. More of the square spent on visible body means more detail. These are shown with sharp pixels, the way the game draws them.</p>
+    <div class="textures">
+      <figure class="tex" style="margin:0">
+        <img src="tex_tripo_raw.png" alt="Tripo's raw texture">
+        <span class="label">Tripo raw · 2048 px (shown at 512)</span>
+        <p>Tripo's own layout. Fine moss and bark detail, strong contrast.</p>
+      </figure>
+      <figure class="tex" style="margin:0">
+        <img src="tex_first_bake.png" alt="Our first bake texture">
+        <span class="label">First bake · 256 px</span>
+        <p>Our unwrap of the 3k mesh. Many small islands with gaps between them. The black areas are the missed rays.</p>
+      </figure>
+      <figure class="tex" style="margin:0">
+        <img src="tex_final_bake.png" alt="Our final bake texture">
+        <span class="label">Final bake · 256 px</span>
+        <p>After cleanup and the second bake. No black, but each body part gets only a few pixels, so the moss pattern is averaged into flat colour.</p>
+      </figure>
+    </div>
+  </section>
+
+  <footer>Generated from <span class="mono">.work/tripo/brutes/brute1_full</span> on branch <span class="mono">brute-variants</span>. Models exported from the Blender pipeline in <span class="mono">tools/blender/greenling_variants.py</span>.</footer>
+</div>
+
+<script>
+const STAGES = [
+  { id: "full_raw_300k", name: "3 · Tripo raw mesh", note: "Straight from Tripo. 1.48M triangles (shown at 300k), 2048 px texture (shown at 1024)." },
+  { id: "full_3k_firstbake", name: "4 · Cut to 3k + first bake", note: "3,003 triangles, 256 px. Black patches are the bake bug." },
+  { id: "full_final_rest", name: "5 · Cleaned, rigged, rebaked", note: "3,139 triangles, 256 px, bind pose. Arms cut free of the shell, legs slimmed." },
+  { id: "full_final_hang", name: "5 · Same, arms hanging", note: "The final mesh posed with the arms down, to check the shoulders." },
+  { id: "full_game_skin", name: "6 · Game skin", note: "Final mesh with the graded texture the game loads." },
+  { id: "lp_raw", name: "Low-poly mode raw", note: "Tripo's low-poly mode: 16,710 triangles, 2048 px texture (shown at 1024)." },
+];
+
+// model data ships as script files (window.GL_MODELS[key]); load each one once, on demand
+const pending = {};
+function loadModel(key) {
+  if (window.GL_MODELS && window.GL_MODELS[key]) return Promise.resolve(window.GL_MODELS[key]);
+  if (!pending[key]) pending[key] = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = key + ".model.js";
+    s.onload = () => res(window.GL_MODELS[key]);
+    s.onerror = () => rej(new Error("could not load " + key));
+    document.head.append(s);
+  });
+  return pending[key];
+}
+function bytes(b64) { const bin = atob(b64), out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out.buffer; }
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const viewers = [];
+function makeViewer(el) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  el.append(renderer.domElement);
+  const loading = document.createElement("div"); loading.className = "loading"; loading.textContent = "Loading model"; el.append(loading);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x50584a, 0.9));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-1.5, 3, 2.5); scene.add(sun);
+  const camera = new THREE.PerspectiveCamera(30, 0.8, 0.05, 50);
+  camera.position.set(-1.6, 1.2, 6.2);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0.85, 0); controls.enableDamping = true; controls.update();
+  const v = { el, renderer, scene, camera, controls, mesh: null, key: null, loading };
+  const resize = () => { const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  new ResizeObserver(resize).observe(el); resize();
+  controls.addEventListener("change", () => { if (v.onMove) v.onMove(v); });
+  viewers.push(v);
+  return v;
+}
+const texLoader = new THREE.TextureLoader();
+async function show(v, key) {
+  v.key = key; v.loading.hidden = false; v.loading.textContent = "Loading model";
+  let m;
+  try { m = await loadModel(key); } catch (e) { v.loading.textContent = "Model failed to load"; return; }
+  if (v.key !== key) return;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(bytes(m.pos)), 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(bytes(m.nrm)), 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(bytes(m.uv)), 2));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(bytes(m.idx)), 1));
+  const tex = texLoader.load(m.tex);
+  tex.flipY = false; tex.encoding = THREE.sRGBEncoding;
+  if (m.nearest) { tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; }
+  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 }));
+  mesh.position.set(m.offset[0], m.offset[1], m.offset[2]);
+  if (v.mesh) { v.scene.remove(v.mesh); v.mesh.geometry.dispose(); v.mesh.material.dispose(); }
+  v.mesh = mesh; v.scene.add(mesh);
+  v.loading.hidden = true;
+}
+
+// stage cards: load when scrolled near
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) if (e.isIntersecting) { io.unobserve(e.target); show(makeViewer(e.target), e.target.dataset.model); }
+}, { rootMargin: "300px" });
+document.querySelectorAll(".mv[data-model]").forEach(el => io.observe(el));
+
+// compare bench
+const A = makeViewer(document.getElementById("mvA")), B = makeViewer(document.getElementById("mvB"));
+function fill(sel, v, note, def) {
+  for (const s of STAGES) { const o = document.createElement("option"); o.value = s.id; o.textContent = s.name; sel.append(o); }
+  const set = id => { show(v, id); note.textContent = STAGES.find(x => x.id === id).note; };
+  sel.value = def; set(def);
+  sel.addEventListener("change", () => set(sel.value));
+}
+fill(document.getElementById("selA"), A, document.getElementById("noteA"), "full_raw_300k");
+fill(document.getElementById("selB"), B, document.getElementById("noteB"), "full_game_skin");
+const sync = document.getElementById("sync");
+let mirroring = false;
+function mirror(from, to) {
+  if (!sync.checked || mirroring) return;
+  mirroring = true;
+  to.camera.position.copy(from.camera.position); to.controls.target.copy(from.controls.target); to.controls.update();
+  mirroring = false;
+}
+A.onMove = () => mirror(A, B); B.onMove = () => mirror(B, A);
+
+(function loop() {
+  for (const v of viewers) { v.controls.update(); v.renderer.render(v.scene, v.camera); }
+  requestAnimationFrame(loop);
+})();
+</script>

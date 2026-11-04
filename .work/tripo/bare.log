@@ -1,0 +1,4 @@
+task 898206ec-038f-4e18-b597-da125312a01d
+status success
+{'model_url': '.work/tripo/bare\\model_url.glb', 'rendered_image_url': '.work/tripo/bare\\rendered_image_url.webp'}
+balance before {'balance': 2960.0, 'frozen': 0.0} after {'balance': 2840.0, 'frozen': 60.0}

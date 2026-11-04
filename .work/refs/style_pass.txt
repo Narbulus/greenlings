@@ -1,0 +1,9 @@
+Two images are attached. EDIT the FIRST image. The SECOND image shows the original Valheim Greydwarf rendered from the game's own model and texture; use it ONLY as the style reference for the texture painting and the eyes. Do not copy its shapes.
+
+In the first image keep exactly: the four views in the same places and size, every silhouette and shape (head, face, chin, trunk on top, body, belly, back, arms, legs, feet), the T-pose and proportions, and the light grey background. The shapes are final; do not change any outline.
+
+Change only the surface painting, in all four views:
+1. Texture: repaint the bark, moss and stone to match the second image's texture style exactly: the same Valheim low-resolution hand-painted look, the same warm orange-brown bark with darker brown streaks along the wood grain, the same muted green moss blotches, the same grey mottled stone, the same soft colour transitions and brightness. Not pixelated, not noisy, not more detailed than the reference.
+2. Eyes: like the original's, each eye is a small low-poly diamond: a flat four-sided rhombus shape, glowing soft pale yellow, roughly the same size and placement as the current eyes, no iris, pupil, highlight or rim.
+
+No mouth. Nothing else changes.

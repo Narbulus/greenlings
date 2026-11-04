@@ -1,0 +1,17 @@
+{
+  "Timestamp": "2026-11-03T15:37:46.1717688Z",
+  "Tests": [
+    {
+      "Test": "arena-layout.txt",
+      "Result": "PASS",
+      "Seconds": 6.1,
+      "Error": null
+    },
+    {
+      "Test": "arena-haul.txt",
+      "Result": "PASS",
+      "Seconds": 37.0,
+      "Error": null
+    }
+  ]
+}
